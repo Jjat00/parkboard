@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Area {
+  PERSONAL
+  WORK
+}
+
+enum Status {
+  IDEA
+  PENDING
+  DOING
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum Kind {
+  TASK
+  IDEA
+  BUG
+  RESEARCH
+  NOTE
+}
+
+/// A group on the canvas. Cards inside it store positions relative to it.
+model Project {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  area      Area     @default(PERSONAL)
+  color     String   @default("#68ddfd")
+  x         Float    @default(0)
+  y         Float    @default(0)
+  width     Float    @default(640)
+  height    Float    @default(420)
+  cards     Card[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Card {
+  id        String    @id @default(cuid())
+  title     String
+  notes     String    @default("")
+  status    Status    @default(PENDING)
+  priority  Priority  @default(MEDIUM)
+  kind      Kind      @default(TASK)
+  /// Area of a card without project. A card in a project uses the project's area.
+  area      Area      @default(PERSONAL)
+  links     Json      @default("[]")
+  tags      String[]  @default([])
+  /// Who created it: "claude-code", "codex", "web", "cli"…
+  origin    String    @default("web")
+  /// Where it was born: a session id, a repo path, a conversation summary.
+  session   String?
+  /// Obsidian note, e.g. "Ideas/CLI de Google Flow por ingeniería inversa"
+  vaultNote String?
+  projectId String?
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  x         Float     @default(0)
+  y         Float     @default(0)
+  doneAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([projectId])
+  @@index([status])
+}
+
+/// Keys for the CLI and agents. Only the SHA-256 hash is stored.
+model ApiKey {
+  id         String    @id @default(cuid())
+  name       String
+  prefix     String
+  hash       String    @unique
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+}

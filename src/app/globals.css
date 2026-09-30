@@ -1,26 +1,70 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-ink: #0a0a0a;
+  --color-panel: #111110;
+  --color-raised: #161615;
+  --color-line: #232323;
+  --color-fg: #ededed;
+  --color-muted: #a1a09a;
+  --color-faint: #666666;
+  --color-cyan: #68ddfd;
+  --color-violet: #9e8cfc;
+  --color-sun: #f5d90a;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
+  background: #0a0a0a;
+  color: #ededed;
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, #68ddfd, #9e8cfc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0a0a0a;
+}
+::-webkit-scrollbar-thumb {
+  background: #232323;
+}
+
+/* React Flow in the site's palette */
+.react-flow {
+  --xy-background-color: #0a0a0a;
+  --xy-background-pattern-dots-color: #232323;
+  --xy-minimap-background-color: #111110;
+  --xy-minimap-mask-background-color: rgba(10, 10, 10, 0.7);
+  --xy-controls-button-background-color: #111110;
+  --xy-controls-button-background-color-hover: #161615;
+  --xy-controls-button-color: #a1a09a;
+  --xy-controls-button-border-color: #232323;
+  --xy-node-border-radius: 12px;
+  --xy-selection-background-color: rgba(104, 221, 253, 0.08);
+  --xy-selection-border: 1px dashed #68ddfd;
+  --xy-resize-background-color: #68ddfd;
+}
+.react-flow__node-project,
+.react-flow__node-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.react-flow__attribution {
+  background: transparent;
+}
+.react-flow__attribution a {
+  color: #444;
 }
