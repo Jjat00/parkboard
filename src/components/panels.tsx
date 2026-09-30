@@ -152,12 +152,15 @@ export function CardPanel({
   onDeleted,
   onClose,
   track,
+  serial,
 }: {
   card: CardDTO;
   projects: ProjectDTO[];
   onSaved: (c: CardDTO) => void;
   /** Registers a write with the board so a refresh started meanwhile is discarded. */
   track: <T>(p: Promise<T>) => Promise<T>;
+  /** Runs writes to the same card one after another (see the board). */
+  serial: <T>(key: string, task: () => Promise<T>) => Promise<T>;
   onDeleted: (id: string) => void;
   onClose: () => void;
 }) {
@@ -186,12 +189,10 @@ export function CardPanel({
     dirtyRef.current = dirty;
   }, [draft, dirty]);
 
-  // Saves run one after another: two quick edits of the same field can never reach the server
-  // in the wrong order, and each text save sends the field's latest value when its turn comes.
-  const queue = useRef<Promise<unknown>>(Promise.resolve());
-  const enqueue = (task: () => Promise<unknown>) => {
-    queue.current = queue.current.then(task, task);
-  };
+  // Saves run one after another in the board's chain for this card, which outlives the panel:
+  // edits made before closing and after reopening still reach the server in order, and each
+  // text save sends the field's latest value when its turn comes.
+  const enqueue = (task: () => Promise<unknown>) => void serial(`card:${card.id}`, task);
 
   const send = async (patch: Parameters<typeof api.updateCard>[1]) => {
     try {

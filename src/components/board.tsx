@@ -256,6 +256,20 @@ function Canvas({ initial }: { initial: BoardData }) {
       mutations.current++;
     });
   }, []);
+  // Writes to the same card or project run one after another, in a chain owned by the board
+  // (it outlives the panels), so the server applies them in the order they were made.
+  const chains = useRef(new Map<string, Promise<unknown>>());
+  const serial = useCallback(<T,>(key: string, task: () => Promise<T>): Promise<T> => {
+    const next = (chains.current.get(key) ?? Promise.resolve()).then(task, task);
+    chains.current.set(
+      key,
+      next.catch(() => undefined),
+    );
+    return next;
+  }, []);
+  // Latest local edit per project field: a response only repaints fields nobody edited since.
+  const generations = useRef(new Map<string, number>());
+
   const refresh = useCallback(async () => {
     if (dragging.current || pending.current || document.visibilityState !== "visible") return;
     const ticket = ++refreshes.current;
@@ -294,15 +308,26 @@ function Canvas({ initial }: { initial: BoardData }) {
     (id: string, patch: Partial<ProjectDTO>) => {
       mutations.current++;
       setData((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
-      track(api.updateProject(id, patch))
+      const fields = Object.keys(patch) as (keyof ProjectDTO)[];
+      const mine = new Map(
+        fields.map((f) => {
+          const key = `${id}:${f}`;
+          const gen = (generations.current.get(key) ?? 0) + 1;
+          generations.current.set(key, gen);
+          return [f, gen] as const;
+        }),
+      );
+      serial(`project:${id}`, () => track(api.updateProject(id, patch)))
         .then(({ project }) => {
-          // Apply what the server saved for the fields this write changed.
-          const saved = Object.fromEntries(Object.keys(patch).map((k) => [k, project[k as keyof ProjectDTO]]));
+          // Apply what the server saved, except fields edited again after this write.
+          const saved = Object.fromEntries(
+            fields.filter((f) => generations.current.get(`${id}:${f}`) === mine.get(f)).map((f) => [f, project[f]]),
+          );
           setData((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, ...saved } : p)) }));
         })
         .catch(console.error);
     },
-    [track],
+    [track, serial],
   );
 
   const onNodeDragStop = useCallback(
@@ -332,23 +357,21 @@ function Canvas({ initial }: { initial: BoardData }) {
         return;
       }
       upsertCard({ ...card, projectId: targetId });
-      track(api.updateCard(card.id, { project: targetId }))
+      serial(`card:${card.id}`, () => track(api.updateCard(card.id, { project: targetId })))
         .then(({ card: saved }) => upsertCard(saved))
         .catch((e) => {
           console.error(e);
           setLayoutVersion((v) => v + 1);
         });
     },
-    [data.cards, layout.rects, getInternalNode, patchProject, upsertCard, track],
+    [data.cards, layout.rects, getInternalNode, patchProject, upsertCard, track, serial],
   );
 
   const arrange = useCallback(() => {
     const positions = arrangeProjects(layout.shownProjects, layout.layouts);
-    mutations.current++;
-    setData((d) => ({ ...d, projects: d.projects.map((p) => ({ ...p, ...positions.get(p.id) })) }));
-    track(Promise.all([...positions].map(([id, pos]) => api.updateProject(id, pos)))).catch(console.error);
+    for (const [id, pos] of positions) patchProject(id, pos);
     setTimeout(() => fitView({ duration: 400, maxZoom: 1 }), 50);
-  }, [layout.shownProjects, layout.layouts, fitView, track]);
+  }, [layout.shownProjects, layout.layouts, fitView, patchProject]);
 
   const addCard = useCallback(
     async (title: string, projectId: string | null) => {
@@ -454,7 +477,7 @@ function Canvas({ initial }: { initial: BoardData }) {
             onOpen={(id) => setSelection({ kind: "card", id })}
             onReopen={(card) => {
               upsertCard({ ...card, status: "PENDING", doneAt: null });
-              track(api.updateCard(card.id, { status: "PENDING" }))
+              serial(`card:${card.id}`, () => track(api.updateCard(card.id, { status: "PENDING" })))
                 .then(({ card: saved }) => upsertCard(saved))
                 .catch(console.error);
             }}
@@ -468,6 +491,7 @@ function Canvas({ initial }: { initial: BoardData }) {
             projects={data.projects}
             onSaved={upsertCard}
             track={track}
+            serial={serial}
             onDeleted={(id) => {
               mutations.current++;
               setData((d) => ({ ...d, cards: d.cards.filter((c) => c.id !== id) }));
