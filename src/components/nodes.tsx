@@ -103,6 +103,7 @@ export const CardItem = memo(function CardItem({ data, selected }: NodeProps<Car
       {expanded && (
         <div className="mt-2 flex min-h-0 flex-1 flex-col gap-2 border-t border-line pt-2">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] text-faint">
+            <span className="font-mono text-muted">#{card.number}</span>
             <span className="flex items-center gap-1">
               <Icon size={11} /> {KIND[card.kind]}
             </span>
@@ -139,6 +140,7 @@ export const CardItem = memo(function CardItem({ data, selected }: NodeProps<Car
 
       {!expanded && (
         <div className="mt-auto flex items-center gap-1.5 pl-3.5 text-[10px] text-faint">
+          <span className="font-mono text-muted">#{card.number}</span>
           <Icon size={10} />
           <span>{KIND[card.kind]}</span>
           {urgent && <span style={{ color: PRIORITY[card.priority].color }}>· {PRIORITY[card.priority].label}</span>}

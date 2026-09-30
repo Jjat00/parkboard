@@ -17,6 +17,8 @@ export type ProjectDTO = {
 
 export type CardDTO = {
   id: string;
+  /** Short per-user number, shown as #12. */
+  number: number;
   title: string;
   notes: string;
   status: StatusKey;

@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "parkboard", "config.json");
 const ENUMS = {
   status: ["idea", "pending", "doing", "done"],
@@ -22,6 +22,7 @@ const SCHEMA = {
   name: "park",
   version: VERSION,
   description: "Park things for later on a Parkboard canvas.",
+  card_reference: "a card is its short number (12 or #12, shown by park ls) or its full id",
   exit_codes: { 0: "ok", 1: "api or network error", 2: "usage error", 3: "not configured", 4: "not found" },
   commands: {
     add: {
@@ -44,10 +45,10 @@ const SCHEMA = {
       },
     },
     ls: { flags: { "-p, --project": "filter", "--status": "open (default)|all|" + ENUMS.status.join("|"), "-q, --query": "text search", "--limit": "default 50" } },
-    show: { args: ["<id>"] },
-    set: { args: ["<id>"], flags: "same as add, plus --title; --project '' moves to the inbox" },
-    done: { args: ["<id>"] },
-    rm: { args: ["<id>"], flags: { "--yes": "required: deletion is permanent" } },
+    show: { args: ["<card>"] },
+    set: { args: ["<card>"], flags: "same as add, plus --title; --project '' moves it to loose ideas" },
+    done: { args: ["<card>"] },
+    rm: { args: ["<card>"], flags: { "--yes": "required: deletion is permanent" } },
     projects: {},
     config: { flags: { "--url": "board URL", "--key": "API key (pk_…)" } },
     schema: {},
@@ -60,10 +61,10 @@ Usage:
   park add "<title>" [-p project] [--priority high] [--kind idea] [--notes …] [--tag t] [--link url] [--summary …]
                          (the Claude Code or Codex session is attached automatically)
   park ls [-p project] [--status open|all|idea|pending|doing|done] [-q text]
-  park show <id>
-  park set <id> [--status doing] [--priority …] [--project …] [--title …]
-  park done <id>
-  park rm <id> --yes
+  park show 12           a card is its number (12 or #12) or its full id
+  park set 12 [--status doing] [--priority …] [--project …] [--title …]
+  park done 12
+  park rm 12 --yes
   park projects
   park config --url https://… --key pk_…
   park schema            machine-readable description of every command
@@ -197,12 +198,12 @@ const PRIO = { LOW: "dim", MEDIUM: "cyan", HIGH: "yellow", URGENT: "red" };
 function line(card) {
   const where = card.project?.slug ?? "ideas";
   const prio = color(PRIO[card.priority], card.priority.toLowerCase().padEnd(6));
-  return `${color("dim", card.id)}  ${prio} ${card.status.toLowerCase().padEnd(7)} ${color("bold", card.title)} ${color("dim", `[${where}]`)}`;
+  return `${color("cyan", `#${card.number}`.padEnd(5))} ${prio} ${card.status.toLowerCase().padEnd(7)} ${color("bold", card.title)} ${color("dim", `[${where}]`)}`;
 }
 
 function detail(card) {
   const rows = [
-    [color("bold", card.title)],
+    [color("bold", `#${card.number} ${card.title}`)],
     ["id", card.id],
     ["project", card.project?.name ?? "ideas sueltas"],
     ["status", card.status.toLowerCase()],
@@ -259,7 +260,8 @@ async function main() {
   });
   const json = v.json || !process.stdout.isTTY;
   const print = (data, human) => process.stdout.write((json ? JSON.stringify(data, null, 2) : human(data)) + "\n");
-  const id = () => positionals[0] ?? die(2, `${cmd} needs a card id (see \`park ls\`)`);
+  // A card is referenced by its short number (12 or #12) or its full id.
+  const id = () => encodeURIComponent(positionals[0] ?? die(2, `${cmd} needs a card number like 12 or #12 (see \`park ls\`)`));
 
   if (v.version) return print({ version: VERSION }, (d) => d.version);
   if (v.help || !cmd) return process.stdout.write(HELP + "\n");
@@ -298,7 +300,7 @@ async function main() {
     case "rm": {
       if (!v.yes) die(2, "rm is permanent: pass --yes to confirm");
       await request("DELETE", `/api/cards/${id()}`);
-      return print({ ok: true, id: id() }, () => `deleted ${id()}`);
+      return print({ ok: true, card: decodeURIComponent(id()) }, () => `deleted ${decodeURIComponent(id())}`);
     }
     case "projects": {
       const { projects } = await request("GET", "/api/projects");

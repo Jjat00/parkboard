@@ -10,11 +10,22 @@ import type { CardDTO, Link, ProjectDTO } from "@/lib/types";
 
 const COLORS = ["#68ddfd", "#9e8cfc", "#f5d90a", "#4ade80", "#fb7185", "#fb923c"];
 
-function Shell({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+function Shell({
+  title,
+  onClose,
+  children,
+  actions,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  actions?: ReactNode;
+}) {
   return (
     <aside className="absolute inset-y-0 right-0 z-20 flex w-full max-w-[400px] flex-col border-l border-line bg-ink/95 backdrop-blur">
-      <div className="flex items-center justify-between border-b border-line px-5 py-3">
+      <div className="flex items-center border-b border-line px-5 py-3">
         <span className="font-mono text-[11px] tracking-wider text-faint uppercase">{title}</span>
+        <div className="ml-auto mr-3 flex items-center gap-2">{actions}</div>
         <button onClick={onClose} className="text-faint hover:text-fg" aria-label="Cerrar">
           <X size={16} />
         </button>
@@ -55,6 +66,24 @@ function SessionBox({ card }: { card: CardDTO }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Copies "#12 Title": the easiest way to point an agent at a card. */
+function CopyRef({ card }: { card: CardDTO }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      onClick={async () => {
+        await navigator.clipboard.writeText(`#${card.number} ${card.title}`);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+      className="flex items-center gap-1 text-[11px] text-faint hover:text-cyan"
+      title="Copia «#número título» para pedirle algo a un agente"
+    >
+      <Copy size={12} /> {copied ? "Copiado" : "Copiar referencia"}
+    </button>
   );
 }
 
@@ -122,7 +151,7 @@ export function CardPanel({
   >;
 
   return (
-    <Shell title="Tarjeta" onClose={onClose}>
+    <Shell title={`Tarjeta #${card.number}`} onClose={onClose} actions={<CopyRef card={draft} />}>
       <textarea
         value={draft.title}
         onChange={(e) => setDraft({ ...draft, title: e.target.value })}
@@ -429,7 +458,9 @@ export function DonePanel({
               <div key={c.id} className="group flex items-start gap-2 rounded-lg border border-line px-3 py-2 hover:bg-raised">
                 <CircleCheck size={14} className="mt-0.5 shrink-0 text-[#4ade80]" />
                 <button onClick={() => onOpen(c.id)} className="min-w-0 flex-1 text-left">
-                  <p className="text-[13px] leading-snug text-fg">{c.title}</p>
+                  <p className="text-[13px] leading-snug text-fg">
+                    <span className="font-mono text-faint">#{c.number}</span> {c.title}
+                  </p>
                   <p className="mt-0.5 font-mono text-[10.5px] text-faint">
                     {c.projectId ? names.get(c.projectId) : "Ideas sueltas"}
                     {took && ` · tomó ${took}`}

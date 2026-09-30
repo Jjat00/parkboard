@@ -57,6 +57,8 @@ model Project {
 model Card {
   id        String    @id @default(cuid())
   ownerId   String
+  /// Short number per owner (#12), easy to say or type when talking to an agent.
+  number    Int       @default(0) // assigned by the card_number trigger
   title     String
   notes     String    @default("")
   status    Status    @default(PENDING)
@@ -87,6 +89,7 @@ model Card {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
+  @@unique([ownerId, number])
   @@index([ownerId, status])
   @@index([projectId])
 }

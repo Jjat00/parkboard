@@ -116,3 +116,9 @@ export async function getBoard(ownerId: string) {
   ]);
   return { projects, cards };
 }
+
+/** Where-clause for one of the owner's cards by id or by its short number ("12" or "#12"). */
+export function cardRef(ownerId: string, ref: string) {
+  const n = /^#?(\d{1,9})$/.exec(decodeURIComponent(ref).trim());
+  return n ? { ownerId, number: Number(n[1]) } : { ownerId, id: ref };
+}

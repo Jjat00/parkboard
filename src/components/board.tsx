@@ -60,7 +60,7 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
       (c) =>
         c.status !== "DONE" &&
         (filters.area === "ALL" || cardArea(c, byId) === filters.area) &&
-        (!q || `${c.title} ${c.notes} ${c.tags.join(" ")}`.toLowerCase().includes(q)),
+        (!q || `#${c.number} ${c.title} ${c.notes} ${c.tags.join(" ")}`.toLowerCase().includes(q) || q === String(c.number)),
     );
     const shownProjects = projects.filter((p) => filters.area === "ALL" || p.area === filters.area);
     const isExpanded = (id: string) => expanded.has(id);

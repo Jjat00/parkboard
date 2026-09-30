@@ -1,5 +1,5 @@
 import { requireActor } from "@/lib/auth";
-import { CardPatch, placeCard, resolveProject } from "@/lib/board";
+import { cardRef, CardPatch, placeCard, resolveProject } from "@/lib/board";
 import { db } from "@/lib/db";
 import { notFound, parseBody } from "@/lib/http";
 
@@ -7,7 +7,7 @@ export async function GET(req: Request, ctx: RouteContext<"/api/cards/[id]">) {
   const actor = await requireActor(req);
   if (actor instanceof Response) return actor;
   const { id } = await ctx.params;
-  const card = await db.card.findFirst({ where: { id, ownerId: actor.userId }, include: { project: true } });
+  const card = await db.card.findFirst({ where: cardRef(actor.userId, id), include: { project: true } });
   return card ? Response.json({ card }) : notFound();
 }
 
@@ -15,7 +15,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/cards/[id]">) 
   const actor = await requireActor(req);
   if (actor instanceof Response) return actor;
   const { id } = await ctx.params;
-  const current = await db.card.findFirst({ where: { id, ownerId: actor.userId } });
+  const current = await db.card.findFirst({ where: cardRef(actor.userId, id) });
   if (!current) return notFound();
   const body = await parseBody(req, CardPatch);
   if (body.error) return body.error;
@@ -29,7 +29,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/cards/[id]">) 
     data.status === undefined ? undefined : data.status === "DONE" ? (current.doneAt ?? new Date()) : null;
 
   const card = await db.card.update({
-    where: { id },
+    where: { id: current.id },
     data: { ...data, ...pos, projectId, doneAt, ...(projectId ? { area: null } : {}) },
     include: { project: { select: { slug: true, name: true, area: true } } },
   });
@@ -40,6 +40,6 @@ export async function DELETE(req: Request, ctx: RouteContext<"/api/cards/[id]">)
   const actor = await requireActor(req);
   if (actor instanceof Response) return actor;
   const { id } = await ctx.params;
-  const deleted = await db.card.deleteMany({ where: { id, ownerId: actor.userId } });
+  const deleted = await db.card.deleteMany({ where: cardRef(actor.userId, id) });
   return deleted.count ? Response.json({ ok: true }) : notFound();
 }

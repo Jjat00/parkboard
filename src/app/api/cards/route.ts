@@ -19,7 +19,14 @@ export async function GET(req: Request) {
   const project = params.get("project");
   if (project) where.project = { OR: [{ id: project }, { slug: slugify(project) }] };
   const q = params.get("q");
-  if (q) where.OR = [{ title: { contains: q, mode: "insensitive" } }, { notes: { contains: q, mode: "insensitive" } }];
+  if (q) {
+    const n = /^#?(\d{1,9})$/.exec(q.trim());
+    where.OR = [
+      { title: { contains: q, mode: "insensitive" } },
+      { notes: { contains: q, mode: "insensitive" } },
+      ...(n ? [{ number: Number(n[1]) }] : []),
+    ];
+  }
   const cards = await db.card.findMany({
     where,
     include: { project: { select: { slug: true, name: true, area: true } } },
