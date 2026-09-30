@@ -69,18 +69,18 @@ function SessionBox({ card }: { card: CardDTO }) {
   );
 }
 
-/** Copies "#12 Title": the easiest way to point an agent at a card. */
+/** Copies "#12 Title de parkboard": the easiest way to point an agent at a card, and it says where it lives. */
 function CopyRef({ card }: { card: CardDTO }) {
   const [copied, setCopied] = useState(false);
   return (
     <button
       onClick={async () => {
-        await navigator.clipboard.writeText(`#${card.number} ${card.title}`);
+        await navigator.clipboard.writeText(`#${card.number} ${card.title} de parkboard`);
         setCopied(true);
         setTimeout(() => setCopied(false), 1500);
       }}
       className="flex items-center gap-1 text-[11px] text-faint hover:text-cyan"
-      title="Copia «#número título» para pedirle algo a un agente"
+      title="Copia «#número título de parkboard» para pedirle algo a un agente"
     >
       <Copy size={12} /> {copied ? "Copiado" : "Copiar referencia"}
     </button>
