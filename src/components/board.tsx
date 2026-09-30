@@ -14,10 +14,10 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { UserButton } from "@clerk/nextjs";
-import { ChevronsDownUp, ChevronsUpDown, FolderPlus, KeyRound, Plus, Search } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, FolderPlus, KeyRound, LayoutGrid, Plus, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { AREA, type AreaKey } from "@/lib/labels";
-import { CARD_W, INBOX_ID, layoutProject, resolveOverlaps } from "@/lib/layout";
+import { arrangeProjects, CARD_W, INBOX_ID, layoutProject, resolveOverlaps } from "@/lib/layout";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
 import { nodeTypes, type CardNode, type ProjectNode } from "./nodes";
 import { CardPanel, KeysPanel, ProjectPanel } from "./panels";
@@ -88,7 +88,7 @@ function Canvas({ initial }: { initial: BoardData }) {
   const [showKeys, setShowKeys] = useState(false);
   const [layoutVersion, setLayoutVersion] = useState(0);
   const dragging = useRef(false);
-  const { getInternalNode, screenToFlowPosition, setCenter } = useReactFlow();
+  const { fitView, getInternalNode, screenToFlowPosition, setCenter } = useReactFlow();
 
   // Read after mount: localStorage does not exist on the server, and a lazy initial state would
   // make the server and client render different toolbars.
@@ -156,7 +156,7 @@ function Canvas({ initial }: { initial: BoardData }) {
         draggable: false,
         selectable: false,
         data: {
-          project: { id: INBOX_ID, slug: "", name: "Ideas sueltas", area: null, color: "#a1a09a", x: r.x, y: r.y, width: r.width, height: r.height },
+          project: { id: INBOX_ID, slug: "", name: "Ideas sueltas", area: null, color: "#a1a09a", x: r.x, y: r.y, width: r.width, height: r.height, createdAt: "" },
           open: data.cards.filter((c) => !c.projectId && c.status !== "DONE").length,
           empty: layouts.get(INBOX_ID)!.cards.size === 0,
           inbox: true,
@@ -246,6 +246,13 @@ function Canvas({ initial }: { initial: BoardData }) {
     [data.cards, layout.rects, getInternalNode, patchProject, upsertCard],
   );
 
+  const arrange = useCallback(() => {
+    const positions = arrangeProjects(layout.shownProjects, layout.layouts);
+    setData((d) => ({ ...d, projects: d.projects.map((p) => ({ ...p, ...positions.get(p.id) })) }));
+    Promise.all([...positions].map(([id, pos]) => api.updateProject(id, pos))).catch(console.error);
+    setTimeout(() => fitView({ duration: 400, maxZoom: 1 }), 50);
+  }, [layout.shownProjects, layout.layouts, fitView]);
+
   const addCard = useCallback(
     async (title: string, projectId: string | null) => {
       const area = filters.area === "ALL" ? undefined : filters.area;
@@ -290,6 +297,7 @@ function Canvas({ initial }: { initial: BoardData }) {
         onFocusProject={focusProject}
         anyExpanded={layout.visible.some((c) => expanded.has(c.id))}
         onSetAllExpanded={setAllExpanded}
+        onArrange={arrange}
         onOpenKeys={() => {
           setSelection(null);
           setShowKeys(true);
@@ -361,6 +369,7 @@ function Toolbar({
   onFocusProject,
   anyExpanded,
   onSetAllExpanded,
+  onArrange,
   onOpenKeys,
 }: {
   data: BoardData;
@@ -371,6 +380,7 @@ function Toolbar({
   onFocusProject: (p: ProjectDTO) => void;
   anyExpanded: boolean;
   onSetAllExpanded: (open: boolean) => void;
+  onArrange: () => void;
   onOpenKeys: () => void;
 }) {
   const [title, setTitle] = useState("");
@@ -488,6 +498,14 @@ function Toolbar({
           />
         </form>
       )}
+
+      <button
+        onClick={onArrange}
+        className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
+        title="Ordenar los proyectos en columnas: trabajo primero, luego personal"
+      >
+        <LayoutGrid size={14} /> Acomodar
+      </button>
 
       <button
         onClick={() => onSetAllExpanded(!anyExpanded)}

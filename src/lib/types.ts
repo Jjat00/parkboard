@@ -12,6 +12,7 @@ export type ProjectDTO = {
   y: number;
   width: number;
   height: number;
+  createdAt: string;
 };
 
 export type CardDTO = {
