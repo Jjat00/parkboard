@@ -26,6 +26,9 @@ export const CardInput = z.object({
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
   origin: z.string().max(40).optional(),
   session: z.string().max(2000).nullish(),
+  agent: z.string().max(40).nullish(),
+  sessionId: z.string().max(200).nullish(),
+  cwd: z.string().max(500).nullish(),
   vaultNote: z.string().max(300).nullish(),
   /** Project id or slug. A new slug creates the project. */
   project: z.string().max(80).nullish(),

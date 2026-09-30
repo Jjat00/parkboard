@@ -68,8 +68,14 @@ model Card {
   tags      String[]  @default([])
   /// Who created it: "claude-code", "codex", "web", "cli"…
   origin    String    @default("web")
-  /// Where it was born: a session id, a repo path, a conversation summary.
+  /// Summary of the conversation where it was born.
   session   String?
+  /// Agent that parked it: "claude-code", "codex"… Detected by the CLI.
+  agent     String?
+  /// That agent's session id, to resume the conversation.
+  sessionId String?
+  /// Working directory of that session (Claude Code resumes per directory).
+  cwd       String?
   /// Obsidian note, e.g. "Ideas/CLI de Google Flow por ingeniería inversa"
   vaultNote String?
   projectId String?

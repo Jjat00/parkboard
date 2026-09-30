@@ -4,12 +4,12 @@
 // Output: human text on a TTY, JSON when piped or with --json. Diagnostics go to stderr.
 // Exit codes: 0 ok, 1 API or network error, 2 usage error, 3 not configured, 4 not found.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "parkboard", "config.json");
 const ENUMS = {
   status: ["idea", "pending", "doing", "done"],
@@ -35,7 +35,9 @@ const SCHEMA = {
         "--area": ENUMS.area.join("|") + " (only for cards without project, or a new project)",
         "--tag": "repeatable",
         "--link": "repeatable URL",
-        "--session": "where it was born: session id, repo path, summary",
+        "--summary": "what the conversation was about, to pick it up cold (alias --session)",
+        "--agent, --session-id, --cwd": "override the detected agent session (CLAUDE_CODE_SESSION_ID or CODEX_THREAD_ID, and the current directory)",
+        "--no-session": "do not attach the agent session",
         "--vault": "Obsidian note path",
         "--origin": "claude-code|codex|cli… (default: the API key name)",
         "--dry-run": "print the request, send nothing",
@@ -55,7 +57,8 @@ const SCHEMA = {
 const HELP = `park ${VERSION}: park things for later on your Parkboard
 
 Usage:
-  park add "<title>" [-p project] [--priority high] [--kind idea] [--notes …] [--tag t] [--link url] [--session …]
+  park add "<title>" [-p project] [--priority high] [--kind idea] [--notes …] [--tag t] [--link url] [--summary …]
+                         (the Claude Code or Codex session is attached automatically)
   park ls [-p project] [--status open|all|idea|pending|doing|done] [-q text]
   park show <id>
   park set <id> [--status doing] [--priority …] [--project …] [--title …]
@@ -130,12 +133,61 @@ function cardBody(v) {
         return die(2, `--link is not a URL: ${url}`);
       }
     }),
-    session: v.session,
+    session: v.summary ?? v.session,
     vaultNote: v.vault,
+    agent: v.agent,
+    sessionId: v["session-id"],
+    cwd: v.cwd,
     origin: v.origin,
     project: v.project === undefined ? undefined : v.project || null,
   };
   return Object.fromEntries(Object.entries(body).filter(([, x]) => x !== undefined));
+}
+
+/** Directory where a Claude Code session started: `claude --resume` only finds it from there. */
+function claudeSessionCwd(id) {
+  const root = join(process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"), "projects");
+  try {
+    for (const dir of readdirSync(root)) {
+      const file = join(root, dir, `${id}.jsonl`);
+      if (!existsSync(file)) continue;
+      const match = readFileSync(file, "utf8").match(/"cwd":"((?:[^"\\]|\\.)*)"/);
+      if (match) return JSON.parse(`"${match[1]}"`);
+    }
+  } catch {
+    /* no Claude Code data here */
+  }
+  return undefined;
+}
+
+/** The agent session running this command, so the card can link back to it. */
+function detectSession(v) {
+  if (v["no-session"]) return {};
+  const claude = process.env.CLAUDE_CODE_SESSION_ID;
+  const codex = process.env.CODEX_THREAD_ID ?? process.env.CODEX_SESSION_ID;
+  const detected = claude
+    ? { agent: "claude-code", sessionId: claude }
+    : codex
+      ? { agent: "codex", sessionId: codex }
+      : {};
+  const out = {
+    agent: v.agent ?? detected.agent,
+    sessionId: v["session-id"] ?? detected.sessionId,
+    cwd:
+      v.cwd ??
+      (detected.agent === "claude-code" ? claudeSessionCwd(detected.sessionId) : undefined) ??
+      (detected.sessionId || v["session-id"] ? process.cwd() : undefined),
+  };
+  return Object.fromEntries(Object.entries(out).filter(([, x]) => x !== undefined));
+}
+
+/** Command that reopens the conversation where a card was born. */
+export function resumeCommand(card) {
+  if (!card.sessionId) return null;
+  const cd = card.cwd ? `cd '${card.cwd.replace(/'/g, "'\\''")}' && ` : "";
+  if (card.agent === "claude-code") return `${cd}claude --resume ${card.sessionId}`;
+  if (card.agent === "codex") return `${cd}codex resume ${card.sessionId}`;
+  return null;
 }
 
 const COLORS = { reset: "\x1b[0m", dim: "\x1b[2m", bold: "\x1b[1m", cyan: "\x1b[36m", yellow: "\x1b[33m", red: "\x1b[31m" };
@@ -159,7 +211,9 @@ function detail(card) {
     ["tags", card.tags.join(", ")],
     ["links", card.links.map((l) => l.url).join("\n        ")],
     ["origin", card.origin],
-    ["session", card.session ?? ""],
+    ["agent", [card.agent, card.sessionId].filter(Boolean).join(" · ")],
+    ["resume", resumeCommand(card) ?? ""],
+    ["summary", card.session ?? ""],
     ["vault", card.vaultNote ?? ""],
     ["created", card.createdAt],
   ];
@@ -185,6 +239,11 @@ async function main() {
       tag: { type: "string", multiple: true },
       link: { type: "string", multiple: true },
       session: { type: "string" },
+      summary: { type: "string" },
+      agent: { type: "string" },
+      "session-id": { type: "string" },
+      cwd: { type: "string" },
+      "no-session": { type: "boolean" },
       vault: { type: "string" },
       origin: { type: "string" },
       query: { type: "string", short: "q" },
@@ -209,7 +268,7 @@ async function main() {
     case "add": {
       const title = positionals.join(" ").trim();
       if (!title) die(2, 'add needs a title: park add "…"');
-      const body = cardBody({ ...v, title, origin: v.origin });
+      const body = { ...cardBody({ ...v, title }), ...detectSession(v) };
       if (v["dry-run"]) return print({ dry_run: true, request: { method: "POST", path: "/api/cards", body } }, (d) => JSON.stringify(d.request, null, 2));
       const { card } = await request("POST", "/api/cards", body);
       return print(card, (c) => `parked ${line(c)}`);

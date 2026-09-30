@@ -26,6 +26,9 @@ export type CardDTO = {
   tags: string[];
   origin: string;
   session: string | null;
+  agent: string | null;
+  sessionId: string | null;
+  cwd: string | null;
   vaultNote: string | null;
   projectId: string | null;
   x: number;
