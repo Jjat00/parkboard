@@ -94,6 +94,13 @@ model Card {
   @@index([projectId])
 }
 
+/// Last card number handed out per owner. Only grows, so a deleted #12 is never reused.
+/// Maintained by the card_next_number trigger.
+model CardCounter {
+  ownerId String @id
+  last    Int
+}
+
 /// Keys for the CLI and agents. Only the SHA-256 hash is stored.
 model ApiKey {
   id         String    @id @default(cuid())

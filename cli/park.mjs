@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 const CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "parkboard", "config.json");
 const ENUMS = {
   status: ["idea", "pending", "doing", "done"],
@@ -182,12 +182,16 @@ function detectSession(v) {
   return Object.fromEntries(Object.entries(out).filter(([, x]) => x !== undefined));
 }
 
-/** Command that reopens the conversation where a card was born. */
+/** Single-quotes a value as one shell word. */
+const shellQuote = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
+
+/** Command that reopens the conversation where a card was born. Every value is quoted. */
 export function resumeCommand(card) {
   if (!card.sessionId) return null;
-  const cd = card.cwd ? `cd '${card.cwd.replace(/'/g, "'\\''")}' && ` : "";
-  if (card.agent === "claude-code") return `${cd}claude --resume ${card.sessionId}`;
-  if (card.agent === "codex") return `${cd}codex resume ${card.sessionId}`;
+  const cd = card.cwd ? `cd ${shellQuote(card.cwd)} && ` : "";
+  const id = shellQuote(card.sessionId);
+  if (card.agent === "claude-code") return `${cd}claude --resume ${id}`;
+  if (card.agent === "codex") return `${cd}codex resume ${id}`;
   return null;
 }
 
@@ -226,7 +230,9 @@ function detail(card) {
 async function main() {
   const argv = process.argv.slice(2);
   const cmd = argv[0] && !argv[0].startsWith("-") ? argv.shift() : undefined;
-  const { values: v, positionals } = parseArgs({
+  let parsed;
+  try {
+    parsed = parseArgs({
     args: argv,
     allowPositionals: true,
     options: {
@@ -257,7 +263,13 @@ async function main() {
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "V" },
     },
-  });
+    });
+  } catch (e) {
+    // Unknown flags or missing values are usage errors (2), not API failures (1).
+    if (String(e?.code).startsWith("ERR_PARSE_ARGS")) die(2, `${e.message}. Run park --help`);
+    throw e;
+  }
+  const { values: v, positionals } = parsed;
   const json = v.json || !process.stdout.isTTY;
   const print = (data, human) => process.stdout.write((json ? JSON.stringify(data, null, 2) : human(data)) + "\n");
   // A card is referenced by its short number (12 or #12) or its full id.
@@ -298,6 +310,7 @@ async function main() {
       return print(card, (c) => `updated ${line(c)}`);
     }
     case "rm": {
+      if (v["dry-run"]) return print({ dry_run: true, request: { method: "DELETE", path: `/api/cards/${id()}` } }, (d) => `would ${d.request.method} ${d.request.path}`);
       if (!v.yes) die(2, "rm is permanent: pass --yes to confirm");
       await request("DELETE", `/api/cards/${id()}`);
       return print({ ok: true, card: decodeURIComponent(id()) }, () => `deleted ${decodeURIComponent(id())}`);
@@ -316,6 +329,10 @@ async function main() {
       const cfg = existsSync(CONFIG) ? JSON.parse(readFileSync(CONFIG, "utf8")) : {};
       if (v.url) cfg.url = v.url.replace(/\/$/, "");
       if (v.key) cfg.key = v.key;
+      if (v["dry-run"]) {
+        const preview = { path: CONFIG, url: cfg.url ?? null, key: cfg.key ? `${cfg.key.slice(0, 8)}…` : null };
+        return print({ dry_run: true, write: preview }, (d) => `would write ${d.write.path}\nurl  ${d.write.url}\nkey  ${d.write.key}`);
+      }
       mkdirSync(join(CONFIG, ".."), { recursive: true });
       writeFileSync(CONFIG, JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
       return print({ ok: true, path: CONFIG }, (d) => `saved ${d.path}`);

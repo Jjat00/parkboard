@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Prisma } from "@/generated/prisma/client";
 import { db } from "./db";
 
 export const CARD_W = 260;
@@ -26,8 +27,15 @@ export const CardInput = z.object({
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
   origin: z.string().max(40).optional(),
   session: z.string().max(2000).nullish(),
-  agent: z.string().max(40).nullish(),
-  sessionId: z.string().max(200).nullish(),
+  agent: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9-]{0,39}$/)
+    .nullish(),
+  /** Agent session ids are UUIDs or simple names; anything else could smuggle shell syntax. */
+  sessionId: z
+    .string()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/)
+    .nullish(),
   cwd: z.string().max(500).nullish(),
   vaultNote: z.string().max(300).nullish(),
   /** Project id or slug. A new slug creates the project. */
@@ -72,10 +80,10 @@ function freeSlot(taken: Box[], cols: number, origin: Box): Box {
   }
 }
 
-export async function createProject(ownerId: string, input: z.infer<typeof ProjectInput>) {
+const isUniqueViolation = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
+
+async function insertProject(ownerId: string, slug: string, input: z.infer<typeof ProjectInput>) {
   const projects = await db.project.findMany({ where: { ownerId } });
-  let slug = slugify(input.name);
-  if (projects.some((p) => p.slug === slug)) slug = `${slug}-${projects.length + 1}`;
   const right = projects.reduce((m, p) => Math.max(m, p.x + p.width), -80);
   return db.project.create({
     data: {
@@ -91,10 +99,42 @@ export async function createProject(ownerId: string, input: z.infer<typeof Proje
   });
 }
 
-/** Resolves one of the owner's projects by id or slug; an unknown slug creates it. */
+/** Creates a new project; a repeated name gets the first free suffix (a, a-2, a-3…). */
+export async function createProject(ownerId: string, input: z.infer<typeof ProjectInput>) {
+  const base = slugify(input.name);
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const taken = new Set(
+      (await db.project.findMany({ where: { ownerId, slug: { startsWith: base } }, select: { slug: true } })).map(
+        (p) => p.slug,
+      ),
+    );
+    let slug = base;
+    for (let n = 2; taken.has(slug); n++) slug = `${base}-${n}`;
+    try {
+      return await insertProject(ownerId, slug, input);
+    } catch (e) {
+      if (!isUniqueViolation(e)) throw e; // someone took it meanwhile: look again
+    }
+  }
+  throw new Error("could not find a free project slug");
+}
+
+/**
+ * Resolves one of the owner's projects by id or slug; an unknown slug creates exactly that
+ * project. Idempotent under concurrency: two agents parking into the same new project end up
+ * in one project.
+ */
 export async function resolveProject(ownerId: string, ref: string, area?: z.infer<typeof Area>) {
-  const found = await db.project.findFirst({ where: { ownerId, OR: [{ id: ref }, { slug: slugify(ref) }] } });
-  return found ?? createProject(ownerId, { name: ref, area });
+  const slug = slugify(ref);
+  const find = () => db.project.findFirst({ where: { ownerId, OR: [{ id: ref }, { slug }] } });
+  const found = await find();
+  if (found) return found;
+  try {
+    return await insertProject(ownerId, slug, { name: ref, area });
+  } catch (e) {
+    if (!isUniqueViolation(e)) throw e;
+    return (await find())!;
+  }
 }
 
 /** Where a new card goes when the caller gives no position, growing the project to fit. */

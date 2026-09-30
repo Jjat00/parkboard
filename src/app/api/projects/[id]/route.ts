@@ -14,19 +14,23 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/projects/[id]"
   return Response.json({ project: await db.project.findUnique({ where: { id } }) });
 }
 
-/** Deleting a project keeps its cards: they move to the inbox. */
+/** Deleting a project keeps its cards: they move to loose ideas, keeping the project's area. */
 export async function DELETE(req: Request, ctx: RouteContext<"/api/projects/[id]">) {
   const actor = await requireActor(req);
   if (actor instanceof Response) return actor;
   const { id } = await ctx.params;
-  const project = await db.project.findFirst({ where: { id, ownerId: actor.userId } });
-  if (!project) return notFound();
-  const cards = await db.card.findMany({ where: { projectId: id } });
-  await db.$transaction([
-    ...cards.map((c) =>
-      db.card.update({ where: { id: c.id }, data: { projectId: null, area: project.area } }),
-    ),
-    db.project.delete({ where: { id } }),
-  ]);
-  return Response.json({ ok: true });
+  const deleted = await db.$transaction(async (tx) => {
+    // Lock the project row: a card being created in it or moved into it waits on this lock
+    // (its foreign key check), so no card slips in between the move below and the delete.
+    const locked = await tx.$queryRaw<{ area: "PERSONAL" | "WORK" }[]>`
+      SELECT "area" FROM "Project" WHERE "id" = ${id} AND "ownerId" = ${actor.userId} FOR UPDATE`;
+    if (!locked.length) return false;
+    await tx.card.updateMany({
+      where: { ownerId: actor.userId, projectId: id },
+      data: { projectId: null, area: locked[0].area },
+    });
+    await tx.project.delete({ where: { id } });
+    return true;
+  });
+  return deleted ? Response.json({ ok: true }) : notFound();
 }

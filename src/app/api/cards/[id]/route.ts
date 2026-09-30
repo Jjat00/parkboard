@@ -1,7 +1,7 @@
 import { requireActor } from "@/lib/auth";
 import { cardRef, CardPatch, placeCard, resolveProject } from "@/lib/board";
 import { db } from "@/lib/db";
-import { notFound, parseBody } from "@/lib/http";
+import { notFound, parseBody, writeConflict } from "@/lib/http";
 
 export async function GET(req: Request, ctx: RouteContext<"/api/cards/[id]">) {
   const actor = await requireActor(req);
@@ -21,19 +21,27 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/cards/[id]">) 
   if (body.error) return body.error;
   const { project, ...data } = body.data;
 
-  let projectId = current.projectId;
-  if (project !== undefined) projectId = project ? (await resolveProject(actor.userId, project, data.area ?? undefined)).id : null;
-  const moved = projectId !== current.projectId;
-  const pos = moved && data.x === undefined ? await placeCard(actor.userId, projectId) : {};
+  // Only touch projectId when the caller asks for a move: writing back the value read above
+  // would undo a move made by a concurrent request.
+  let move = {};
+  if (project !== undefined) {
+    const projectId = project ? (await resolveProject(actor.userId, project, data.area ?? undefined)).id : null;
+    const pos = projectId !== current.projectId && data.x === undefined ? await placeCard(actor.userId, projectId) : {};
+    move = { projectId, ...pos, ...(projectId ? { area: null } : {}) };
+  }
   const doneAt =
     data.status === undefined ? undefined : data.status === "DONE" ? (current.doneAt ?? new Date()) : null;
 
-  const card = await db.card.update({
-    where: { id: current.id },
-    data: { ...data, ...pos, projectId, doneAt, ...(projectId ? { area: null } : {}) },
-    include: { project: { select: { slug: true, name: true, area: true } } },
-  });
-  return Response.json({ card });
+  try {
+    const card = await db.card.update({
+      where: { id: current.id, ownerId: actor.userId },
+      data: { ...data, ...move, doneAt },
+      include: { project: { select: { slug: true, name: true, area: true } } },
+    });
+    return Response.json({ card });
+  } catch (e) {
+    return writeConflict(e);
+  }
 }
 
 export async function DELETE(req: Request, ctx: RouteContext<"/api/cards/[id]">) {

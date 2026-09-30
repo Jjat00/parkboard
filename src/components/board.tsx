@@ -240,10 +240,18 @@ function Canvas({ initial }: { initial: BoardData }) {
     setNodes([...projectNodes, ...cardNodes]);
   }, [layout, data.cards, selection, toggleExpanded, setNodes, layoutVersion, filters.sort]);
 
+  // Every local change bumps `mutations`; a refresh whose request started before the latest
+  // change (or before a newer refresh) is stale and dropped, and so is one landing mid-drag.
+  const mutations = useRef(0);
+  const refreshes = useRef(0);
   const refresh = useCallback(async () => {
     if (dragging.current || document.visibilityState !== "visible") return;
+    const ticket = ++refreshes.current;
+    const seenMutations = mutations.current;
     try {
-      setData(await api.board());
+      const board = await api.board();
+      if (ticket !== refreshes.current || seenMutations !== mutations.current || dragging.current) return;
+      setData(board);
     } catch (e) {
       console.error(e);
     }
@@ -259,13 +267,18 @@ function Canvas({ initial }: { initial: BoardData }) {
   }, [refresh]);
 
   const upsertCard = useCallback((card: CardDTO) => {
+    mutations.current++;
     setData((d) => {
-      const exists = d.cards.some((c) => c.id === card.id);
-      return { ...d, cards: exists ? d.cards.map((c) => (c.id === card.id ? card : c)) : [...d.cards, card] };
+      const current = d.cards.find((c) => c.id === card.id);
+      if (!current) return { ...d, cards: [...d.cards, card] };
+      // A save response that arrives after a newer one must not roll the card back.
+      if (card.updatedAt < current.updatedAt) return d;
+      return { ...d, cards: d.cards.map((c) => (c.id === card.id ? card : c)) };
     });
   }, []);
 
   const patchProject = useCallback((id: string, patch: Partial<ProjectDTO>) => {
+    mutations.current++;
     setData((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
     api.updateProject(id, patch).catch(console.error);
   }, []);
@@ -303,6 +316,7 @@ function Canvas({ initial }: { initial: BoardData }) {
 
   const arrange = useCallback(() => {
     const positions = arrangeProjects(layout.shownProjects, layout.layouts);
+    mutations.current++;
     setData((d) => ({ ...d, projects: d.projects.map((p) => ({ ...p, ...positions.get(p.id) })) }));
     Promise.all([...positions].map(([id, pos]) => api.updateProject(id, pos))).catch(console.error);
     setTimeout(() => fitView({ duration: 400, maxZoom: 1 }), 50);
@@ -323,6 +337,7 @@ function Canvas({ initial }: { initial: BoardData }) {
       const center = screenToFlowPosition({ x: window.innerWidth / 2 - 150, y: window.innerHeight / 2 - 60 });
       const area = filters.area === "ALL" ? "PERSONAL" : filters.area;
       const { project } = await api.createProject({ name, area, x: center.x, y: center.y });
+      mutations.current++;
       setData((d) => ({ ...d, projects: [...d.projects, project] }));
       setSelection({ kind: "project", id: project.id });
     },
@@ -371,6 +386,7 @@ function Canvas({ initial }: { initial: BoardData }) {
           onNodesChange={onNodesChange}
           nodeTypes={nodeTypes}
           onNodeDragStart={() => (dragging.current = true)}
+          deleteKeyCode={null}
           onNodeDragStop={onNodeDragStop}
           onNodeClick={(_, n) => {
             if (n.id !== INBOX_ID) setSelection({ kind: n.type === "project" ? "project" : "card", id: n.id });
@@ -411,6 +427,7 @@ function Canvas({ initial }: { initial: BoardData }) {
             projects={data.projects}
             onSaved={upsertCard}
             onDeleted={(id) => {
+              mutations.current++;
               setData((d) => ({ ...d, cards: d.cards.filter((c) => c.id !== id) }));
               setSelection(null);
             }}
@@ -424,6 +441,7 @@ function Canvas({ initial }: { initial: BoardData }) {
             onSave={(patch) => patchProject(selectedProject.id, patch)}
             onDeleted={async () => {
               setSelection(null);
+              mutations.current++;
               setData(await api.board());
             }}
             onClose={() => setSelection(null)}

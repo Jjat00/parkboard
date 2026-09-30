@@ -23,7 +23,11 @@ export async function actorFromSession(): Promise<Actor | null> {
   const allowed = allowedEmails();
   if (allowed.length) {
     const user = await currentUser();
-    const emails = user?.emailAddresses.map((e) => e.emailAddress.toLowerCase()) ?? [];
+    // Only verified addresses count: an unverified secondary email proves nothing.
+    const emails =
+      user?.emailAddresses
+        .filter((e) => e.verification?.status === "verified")
+        .map((e) => e.emailAddress.toLowerCase()) ?? [];
     if (!emails.some((e) => allowed.includes(e))) return null;
   }
   return { userId, via: "session" };

@@ -2,7 +2,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { requireActor } from "@/lib/auth";
 import { CardInput, placeCard, resolveProject, slugify, Status } from "@/lib/board";
 import { db } from "@/lib/db";
-import { parseBody } from "@/lib/http";
+import { parseBody, writeConflict } from "@/lib/http";
 
 export async function GET(req: Request) {
   const actor = await requireActor(req);
@@ -44,7 +44,8 @@ export async function POST(req: Request) {
   const { project, x, y, ...data } = body.data;
   const projectId = project ? (await resolveProject(actor.userId, project, data.area ?? undefined)).id : null;
   const pos = x !== undefined && y !== undefined ? { x, y } : await placeCard(actor.userId, projectId);
-  const card = await db.card.create({
+  const card = await db.card
+    .create({
     data: {
       ...data,
       ...pos,
@@ -55,7 +56,9 @@ export async function POST(req: Request) {
       origin: data.origin ?? (actor.via === "key" ? actor.name : "web"),
       doneAt: data.status === "DONE" ? new Date() : null,
     },
-    include: { project: { select: { slug: true, name: true, area: true } } },
-  });
+      include: { project: { select: { slug: true, name: true, area: true } } },
+    })
+    .catch((e: unknown) => writeConflict(e));
+  if (card instanceof Response) return card;
   return Response.json({ card }, { status: 201 });
 }

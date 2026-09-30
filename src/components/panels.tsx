@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Bot, CircleCheck, Copy, ExternalLink, Trash2, X } from "lucide-react";
 import { api, type ApiKeyDTO } from "@/lib/api";
 import { AREA, KIND, PRIORITY, STATUS, type AreaKey } from "@/lib/labels";
@@ -33,6 +33,32 @@ function Shell({
       <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">{children}</div>
     </aside>
   );
+}
+
+type TextKey = "title" | "notes" | "session" | "vaultNote" | "tagsText";
+type Draft = Omit<CardDTO, "session" | "vaultNote"> & { session: string; vaultNote: string; tagsText: string };
+
+const toDraft = (card: CardDTO): Draft => ({
+  ...card,
+  session: card.session ?? "",
+  vaultNote: card.vaultNote ?? "",
+  tagsText: card.tags.join(", "),
+});
+
+/** The API body for one edited text field. Optional texts become null when emptied; notes stay "". */
+function textPatch(key: TextKey, value: string): Parameters<typeof api.updateCard>[1] {
+  switch (key) {
+    case "title":
+      return { title: value.trim() };
+    case "notes":
+      return { notes: value };
+    case "session":
+      return { session: value.trim() ? value : null };
+    case "vaultNote":
+      return { vaultNote: value.trim() ? value.trim() : null };
+    case "tagsText":
+      return { tags: value.split(",").map((t) => t.trim()).filter(Boolean) };
+  }
 }
 
 function SessionBox({ card }: { card: CardDTO }) {
@@ -132,30 +158,87 @@ export function CardPanel({
   onDeleted: (id: string) => void;
   onClose: () => void;
 }) {
-  const [draft, setDraft] = useState(card);
+  // Text fields are edited locally and saved on blur. `dirty` marks fields with local edits:
+  // updates from the board (a save response, the 20 s refresh, an agent's edit) replace every
+  // field except those, so neither side silently overwrites the other.
+  const [draft, setDraft] = useState(() => toDraft(card));
+  const [dirty, setDirty] = useState<ReadonlySet<TextKey>>(new Set());
+  const [synced, setSynced] = useState(card);
+  const [error, setError] = useState<string | null>(null);
   const [newLink, setNewLink] = useState("");
 
-  const save = async (patch: Parameters<typeof api.updateCard>[1]) => {
-    setDraft((d) => ({ ...d, ...(patch as Partial<CardDTO>) }));
-    const { card: saved } = await api.updateCard(card.id, patch);
-    onSaved(saved);
-    setDraft(saved);
+  if (card !== synced) {
+    setSynced(card);
+    setDraft((d) => {
+      const next = toDraft(card);
+      for (const k of dirty) (next as Record<TextKey, string>)[k] = d[k];
+      return next;
+    });
+  }
+
+  const send = async (patch: Parameters<typeof api.updateCard>[1]) => {
+    try {
+      const { card: saved } = await api.updateCard(card.id, patch);
+      setError(null);
+      onSaved(saved);
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar");
+      return false;
+    }
   };
-  const saveText = (key: "title" | "notes" | "session" | "vaultNote") => () => {
-    const value = draft[key] ?? "";
-    if (value !== (card[key] ?? "")) save({ [key]: key === "title" ? value : value || null } as never);
+
+  const edit = (key: TextKey, value: string) => {
+    setDraft((d) => ({ ...d, [key]: value }));
+    setDirty((s) => new Set(s).add(key));
   };
+
+  const commit = (key: TextKey) => async () => {
+    if (!dirty.has(key)) return;
+    const value = draft[key];
+    if (key === "title" && !value.trim()) {
+      // A card needs a title: drop the empty edit instead of sending an invalid save.
+      setDraft((d) => ({ ...d, title: card.title }));
+      setDirty((s) => {
+        const next = new Set(s);
+        next.delete("title");
+        return next;
+      });
+      return;
+    }
+    const ok = await send(textPatch(key, value));
+    // Keep the field dirty if it changed again while the request was in flight.
+    if (ok)
+      setDirty((s) => {
+        const next = new Set(s);
+        if (draftRef.current[key] === value) next.delete(key);
+        return next;
+      });
+  };
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+
+  /** Selects, links and other one-click changes save right away. */
+  const save = (patch: Parameters<typeof api.updateCard>[1]) => send(patch);
+
   const priorityLabels = Object.fromEntries(Object.entries(PRIORITY).map(([k, v]) => [k, v.label])) as Record<
     keyof typeof PRIORITY,
     string
   >;
 
   return (
-    <Shell title={`Tarjeta #${card.number}`} onClose={onClose} actions={<CopyRef card={draft} />}>
+    <Shell title={`Tarjeta #${card.number}`} onClose={onClose} actions={<CopyRef card={card} />}>
+      {error && (
+        <p className="rounded-lg border border-[#fb7185]/40 bg-[#fb7185]/10 px-3 py-2 text-xs text-[#fb7185]">
+          No se guardó el último cambio ({error}). Vuelve a intentarlo.
+        </p>
+      )}
       <textarea
         value={draft.title}
-        onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-        onBlur={saveText("title")}
+        onChange={(e) => edit("title", e.target.value)}
+        onBlur={commit("title")}
         rows={2}
         className="w-full resize-none bg-transparent text-lg leading-snug font-semibold text-fg outline-none"
       />
@@ -202,8 +285,8 @@ export function CardPanel({
       <Field label="Notas">
         <textarea
           value={draft.notes}
-          onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-          onBlur={saveText("notes")}
+          onChange={(e) => edit("notes", e.target.value)}
+          onBlur={commit("notes")}
           rows={7}
           placeholder="Contexto, próximos pasos, por qué quedó para después…"
           className={`${input} resize-y font-mono text-[13px]`}
@@ -212,11 +295,9 @@ export function CardPanel({
 
       <Field label="Etiquetas (separadas por coma)">
         <input
-          defaultValue={draft.tags.join(", ")}
-          onBlur={(e) => {
-            const tags = e.target.value.split(",").map((t) => t.trim()).filter(Boolean);
-            if (tags.join() !== card.tags.join()) save({ tags });
-          }}
+          value={draft.tagsText}
+          onChange={(e) => edit("tagsText", e.target.value)}
+          onBlur={commit("tagsText")}
           className={input}
         />
       </Field>
@@ -260,8 +341,8 @@ export function CardPanel({
         <Field label="Resumen de la conversación">
           <textarea
             value={draft.session ?? ""}
-            onChange={(e) => setDraft({ ...draft, session: e.target.value })}
-            onBlur={saveText("session")}
+            onChange={(e) => edit("session", e.target.value)}
+            onBlur={commit("session")}
             rows={3}
             placeholder="Qué se estaba haciendo cuando quedó para después"
             className={`${input} resize-y text-xs`}
@@ -270,8 +351,8 @@ export function CardPanel({
         <Field label="Nota del vault">
           <input
             value={draft.vaultNote ?? ""}
-            onChange={(e) => setDraft({ ...draft, vaultNote: e.target.value })}
-            onBlur={saveText("vaultNote")}
+            onChange={(e) => edit("vaultNote", e.target.value)}
+            onBlur={commit("vaultNote")}
             placeholder="Ideas/Nombre de la nota"
             className={`${input} font-mono text-xs`}
           />
