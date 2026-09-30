@@ -15,12 +15,12 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { UserButton } from "@clerk/nextjs";
-import { FolderPlus, Plus, Search } from "lucide-react";
+import { FolderPlus, KeyRound, Plus, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { AREA, type AreaKey } from "@/lib/labels";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
 import { nodeTypes, type CardNode, type ProjectNode } from "./nodes";
-import { CardPanel, ProjectPanel } from "./panels";
+import { CardPanel, KeysPanel, ProjectPanel } from "./panels";
 
 type BoardData = { projects: ProjectDTO[]; cards: CardDTO[] };
 type Filters = { area: AreaKey | "ALL"; showDone: boolean; q: string };
@@ -79,6 +79,7 @@ function Canvas({ initial }: { initial: BoardData }) {
   const [filters, setFilters] = useState<Filters>({ area: "ALL", showDone: false, q: "" });
   const [selection, setSelection] = useState<{ kind: "card" | "project"; id: string } | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [showKeys, setShowKeys] = useState(false);
   const dragging = useRef(false);
   const { getInternalNode, screenToFlowPosition, setCenter } = useReactFlow();
 
@@ -202,6 +203,10 @@ function Canvas({ initial }: { initial: BoardData }) {
         onAddCard={addCard}
         onAddProject={addProject}
         onFocusProject={focusProject}
+        onOpenKeys={() => {
+          setSelection(null);
+          setShowKeys(true);
+        }}
       />
       <div className="relative flex-1">
         <ReactFlow
@@ -227,6 +232,7 @@ function Canvas({ initial }: { initial: BoardData }) {
             nodeColor={(n) => (n.type === "project" ? `${(n.data as ProjectNode["data"]).project.color}33` : "#232323")}
           />
         </ReactFlow>
+        {showKeys && !selection && <KeysPanel onClose={() => setShowKeys(false)} />}
         {selectedCard && (
           <CardPanel
             key={selectedCard.id}
@@ -264,6 +270,7 @@ function Toolbar({
   onAddCard,
   onAddProject,
   onFocusProject,
+  onOpenKeys,
 }: {
   data: BoardData;
   filters: Filters;
@@ -271,6 +278,7 @@ function Toolbar({
   onAddCard: (title: string, projectId: string | null) => Promise<void>;
   onAddProject: (name: string) => Promise<void>;
   onFocusProject: (p: ProjectDTO) => void;
+  onOpenKeys: () => void;
 }) {
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState<string>("");
@@ -387,6 +395,13 @@ function Toolbar({
           />
         </form>
       )}
+
+      <button
+        onClick={onOpenKeys}
+        className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
+      >
+        <KeyRound size={14} /> CLI
+      </button>
 
       <UserButton />
     </header>

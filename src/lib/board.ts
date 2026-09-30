@@ -69,14 +69,15 @@ function freeSlot(taken: Box[], cols: number, origin: Box): Box {
   }
 }
 
-export async function createProject(input: z.infer<typeof ProjectInput>) {
-  const projects = await db.project.findMany();
+export async function createProject(ownerId: string, input: z.infer<typeof ProjectInput>) {
+  const projects = await db.project.findMany({ where: { ownerId } });
   let slug = slugify(input.name);
   if (projects.some((p) => p.slug === slug)) slug = `${slug}-${projects.length + 1}`;
   const right = projects.reduce((m, p) => Math.max(m, p.x + p.width), -80);
   return db.project.create({
     data: {
       ...input,
+      ownerId,
       slug,
       color: input.color ?? PALETTE[projects.length % PALETTE.length],
       x: input.x ?? right + 80,
@@ -87,17 +88,17 @@ export async function createProject(input: z.infer<typeof ProjectInput>) {
   });
 }
 
-/** Resolves a project by id or slug; an unknown slug creates it. */
-export async function resolveProject(ref: string, area?: z.infer<typeof Area>) {
-  const found = await db.project.findFirst({ where: { OR: [{ id: ref }, { slug: slugify(ref) }] } });
-  return found ?? createProject({ name: ref, area });
+/** Resolves one of the owner's projects by id or slug; an unknown slug creates it. */
+export async function resolveProject(ownerId: string, ref: string, area?: z.infer<typeof Area>) {
+  const found = await db.project.findFirst({ where: { ownerId, OR: [{ id: ref }, { slug: slugify(ref) }] } });
+  return found ?? createProject(ownerId, { name: ref, area });
 }
 
 /** Where a new card goes when the caller gives no position, growing the project to fit. */
-export async function placeCard(projectId: string | null) {
-  const cards = await db.card.findMany({ where: { projectId }, select: { x: true, y: true } });
+export async function placeCard(ownerId: string, projectId: string | null) {
+  const cards = await db.card.findMany({ where: { ownerId, projectId }, select: { x: true, y: true } });
   if (!projectId) return freeSlot(cards, 1, { x: -CARD_W - 120, y: HEADER });
-  const project = await db.project.findUniqueOrThrow({ where: { id: projectId } });
+  const project = await db.project.findUniqueOrThrow({ where: { id: projectId, ownerId } });
   const cols = Math.max(1, Math.floor((project.width - PAD * 2 + GAP) / (CARD_W + GAP)));
   const slot = freeSlot(cards, cols, { x: PAD, y: HEADER });
   const needed = slot.y + CARD_H + PAD;
@@ -105,10 +106,10 @@ export async function placeCard(projectId: string | null) {
   return slot;
 }
 
-export async function getBoard() {
+export async function getBoard(ownerId: string) {
   const [projects, cards] = await Promise.all([
-    db.project.findMany({ orderBy: { createdAt: "asc" } }),
-    db.card.findMany({ orderBy: { createdAt: "asc" } }),
+    db.project.findMany({ where: { ownerId }, orderBy: { createdAt: "asc" } }),
+    db.card.findMany({ where: { ownerId }, orderBy: { createdAt: "asc" } }),
   ]);
   return { projects, cards };
 }

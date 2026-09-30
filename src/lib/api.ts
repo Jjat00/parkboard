@@ -22,4 +22,9 @@ export const api = {
   updateProject: (id: string, data: Partial<ProjectDTO>) =>
     call<{ project: ProjectDTO }>("PATCH", `/api/projects/${id}`, data),
   deleteProject: (id: string) => call<{ ok: true }>("DELETE", `/api/projects/${id}`),
+  keys: () => call<{ keys: ApiKeyDTO[] }>("GET", "/api/keys"),
+  createKey: (name: string) => call<{ key: ApiKeyDTO; secret: string }>("POST", "/api/keys", { name }),
+  revokeKey: (id: string) => call<{ ok: true }>("DELETE", `/api/keys/${id}`),
 };
+
+export type ApiKeyDTO = { id: string; name: string; prefix: string; lastUsedAt: string | null; createdAt: string };

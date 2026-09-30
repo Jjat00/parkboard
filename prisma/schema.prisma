@@ -37,7 +37,9 @@ enum Kind {
 /// A group on the canvas. Cards inside it store positions relative to it.
 model Project {
   id        String   @id @default(cuid())
-  slug      String   @unique
+  /// Clerk user id. Every board belongs to one user.
+  ownerId   String
+  slug      String
   name      String
   area      Area     @default(PERSONAL)
   color     String   @default("#68ddfd")
@@ -48,10 +50,13 @@ model Project {
   cards     Card[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, slug])
 }
 
 model Card {
   id        String    @id @default(cuid())
+  ownerId   String
   title     String
   notes     String    @default("")
   status    Status    @default(PENDING)
@@ -75,17 +80,20 @@ model Card {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
+  @@index([ownerId, status])
   @@index([projectId])
-  @@index([status])
 }
 
 /// Keys for the CLI and agents. Only the SHA-256 hash is stored.
 model ApiKey {
   id         String    @id @default(cuid())
+  ownerId    String
   name       String
   prefix     String
   hash       String    @unique
   lastUsedAt DateTime?
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
+
+  @@index([ownerId])
 }

@@ -8,10 +8,14 @@ export async function GET(req: Request) {
   const actor = await requireActor(req);
   if (actor instanceof Response) return actor;
   const params = new URL(req.url).searchParams;
-  const where: Prisma.CardWhereInput = {};
+  const where: Prisma.CardWhereInput = { ownerId: actor.userId };
   const status = params.get("status");
   if (status === "open") where.status = { not: "DONE" };
-  else if (status) where.status = Status.parse(status.toUpperCase());
+  else if (status) {
+    const parsed = Status.safeParse(status.toUpperCase());
+    if (!parsed.success) return Response.json({ error: "invalid_status" }, { status: 400 });
+    where.status = parsed.data;
+  }
   const project = params.get("project");
   if (project) where.project = { OR: [{ id: project }, { slug: slugify(project) }] };
   const q = params.get("q");
@@ -20,7 +24,7 @@ export async function GET(req: Request) {
     where,
     include: { project: { select: { slug: true, name: true, area: true } } },
     orderBy: [{ createdAt: "desc" }],
-    take: Math.min(Number(params.get("limit") ?? 100), 500),
+    take: Math.min(Number(params.get("limit") ?? 100) || 100, 500),
   });
   return Response.json({ cards });
 }
@@ -31,14 +35,15 @@ export async function POST(req: Request) {
   const body = await parseBody(req, CardInput);
   if (body.error) return body.error;
   const { project, x, y, ...data } = body.data;
-  const projectId = project ? (await resolveProject(project, data.area)).id : null;
-  const pos = x !== undefined && y !== undefined ? { x, y } : await placeCard(projectId);
+  const projectId = project ? (await resolveProject(actor.userId, project, data.area)).id : null;
+  const pos = x !== undefined && y !== undefined ? { x, y } : await placeCard(actor.userId, projectId);
   const card = await db.card.create({
     data: {
       ...data,
       ...pos,
+      ownerId: actor.userId,
       projectId,
-      origin: data.origin ?? (actor.kind === "key" ? actor.name : "web"),
+      origin: data.origin ?? (actor.via === "key" ? actor.name : "web"),
       doneAt: data.status === "DONE" ? new Date() : null,
     },
     include: { project: { select: { slug: true, name: true, area: true } } },

@@ -1,13 +1,13 @@
 import { auth } from "@clerk/nextjs/server";
 import { SignOutButton } from "@clerk/nextjs";
 import { Board } from "@/components/board";
-import { ownerFromSession } from "@/lib/auth";
+import { actorFromSession } from "@/lib/auth";
 import { getBoard } from "@/lib/board";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
 
 export default async function Home() {
   await auth.protect();
-  const owner = await ownerFromSession();
+  const owner = await actorFromSession();
   if (!owner) {
     return (
       <main className="flex h-full flex-col items-center justify-center gap-4 text-center">
@@ -18,6 +18,6 @@ export default async function Home() {
       </main>
     );
   }
-  const board = await getBoard();
+  const board = await getBoard(owner.userId);
   return <Board initial={JSON.parse(JSON.stringify(board)) as { projects: ProjectDTO[]; cards: CardDTO[] }} />;
 }

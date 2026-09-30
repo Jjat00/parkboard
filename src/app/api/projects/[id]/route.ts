@@ -9,7 +9,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/projects/[id]"
   const { id } = await ctx.params;
   const body = await parseBody(req, ProjectPatch);
   if (body.error) return body.error;
-  const updated = await db.project.updateMany({ where: { id }, data: body.data });
+  const updated = await db.project.updateMany({ where: { id, ownerId: actor.userId }, data: body.data });
   if (!updated.count) return notFound();
   return Response.json({ project: await db.project.findUnique({ where: { id } }) });
 }
@@ -19,7 +19,7 @@ export async function DELETE(req: Request, ctx: RouteContext<"/api/projects/[id]
   const actor = await requireActor(req);
   if (actor instanceof Response) return actor;
   const { id } = await ctx.params;
-  const project = await db.project.findUnique({ where: { id } });
+  const project = await db.project.findFirst({ where: { id, ownerId: actor.userId } });
   if (!project) return notFound();
   const cards = await db.card.findMany({ where: { projectId: id } });
   await db.$transaction([

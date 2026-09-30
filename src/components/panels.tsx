@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { ExternalLink, Trash2, X } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, type ApiKeyDTO } from "@/lib/api";
 import { AREA, KIND, PRIORITY, STATUS, type AreaKey } from "@/lib/labels";
 import type { CardDTO, Link, ProjectDTO } from "@/lib/types";
 
@@ -268,6 +268,81 @@ export function ProjectPanel({
       >
         <Trash2 size={14} /> Borrar proyecto
       </button>
+    </Shell>
+  );
+}
+
+export function KeysPanel({ onClose }: { onClose: () => void }) {
+  const [keys, setKeys] = useState<ApiKeyDTO[] | null>(null);
+  const [name, setName] = useState("");
+  const [secret, setSecret] = useState<string | null>(null);
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+
+  useEffect(() => {
+    api.keys().then(({ keys }) => setKeys(keys)).catch(console.error);
+  }, []);
+
+  return (
+    <Shell title="Claves para el CLI y los agentes" onClose={onClose}>
+      <p className="text-sm text-muted">
+        Cada clave actúa como tú sobre tu tablero. Úsala con el CLI <code className="font-mono text-cyan">park</code> o
+        desde tus agentes.
+      </p>
+
+      <form
+        className="flex gap-2"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (!name.trim()) return;
+          const { key, secret } = await api.createKey(name.trim());
+          setKeys((k) => [key, ...(k ?? [])]);
+          setSecret(secret);
+          setName("");
+        }}
+      >
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre: laptop, codex…" className={input} />
+        <button className="shrink-0 rounded-lg bg-white px-3 text-sm font-medium text-ink hover:bg-zinc-200">Crear</button>
+      </form>
+
+      {secret && (
+        <div className="space-y-2 rounded-xl border border-sun/40 bg-sun/5 p-4">
+          <p className="text-xs text-sun">Cópiala ahora: no se vuelve a mostrar.</p>
+          <pre className="overflow-x-auto rounded-lg bg-ink p-3 font-mono text-[11px] whitespace-pre-wrap text-fg">
+            {`park config --url ${origin} --key ${secret}`}
+          </pre>
+          <button
+            onClick={() => navigator.clipboard.writeText(`park config --url ${origin} --key ${secret}`)}
+            className="text-xs text-cyan hover:underline"
+          >
+            Copiar comando
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        {keys === null && <p className="text-xs text-faint">Cargando…</p>}
+        {keys?.length === 0 && <p className="text-xs text-faint">Aún no tienes claves.</p>}
+        {keys?.map((k) => (
+          <div key={k.id} className="flex items-center gap-3 rounded-lg border border-line px-3 py-2">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm text-fg">{k.name}</p>
+              <p className="font-mono text-[11px] text-faint">
+                {k.prefix}… · {k.lastUsedAt ? `usada ${new Date(k.lastUsedAt).toLocaleDateString("es-CO")}` : "sin usar"}
+              </p>
+            </div>
+            <button
+              onClick={async () => {
+                if (!confirm(`¿Revocar la clave «${k.name}»? Lo que la use dejará de funcionar.`)) return;
+                await api.revokeKey(k.id);
+                setKeys((ks) => ks?.filter((x) => x.id !== k.id) ?? null);
+              }}
+              className="text-xs text-faint hover:text-[#fb7185]"
+            >
+              Revocar
+            </button>
+          </div>
+        ))}
+      </div>
     </Shell>
   );
 }
