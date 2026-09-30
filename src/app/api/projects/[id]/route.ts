@@ -24,7 +24,7 @@ export async function DELETE(req: Request, ctx: RouteContext<"/api/projects/[id]
   const cards = await db.card.findMany({ where: { projectId: id } });
   await db.$transaction([
     ...cards.map((c) =>
-      db.card.update({ where: { id: c.id }, data: { projectId: null, area: project.area, x: project.x + c.x, y: project.y + c.y } }),
+      db.card.update({ where: { id: c.id }, data: { projectId: null, area: project.area } }),
     ),
     db.project.delete({ where: { id } }),
   ]);

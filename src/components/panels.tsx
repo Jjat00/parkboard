@@ -146,7 +146,7 @@ export function CardPanel({
             onChange={(e) => save({ project: e.target.value || null })}
             className={input}
           >
-            <option value="">Bandeja</option>
+            <option value="">Ideas sueltas</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -156,7 +156,15 @@ export function CardPanel({
         </Field>
         {!draft.projectId && (
           <Field label="Área">
-            <Select value={draft.area} options={AREA} onChange={(area) => save({ area })} />
+            <select
+              value={draft.area ?? ""}
+              onChange={(e) => save({ area: (e.target.value || null) as AreaKey | null })}
+              className={input}
+            >
+              <option value="">Sin área</option>
+              <option value="PERSONAL">{AREA.PERSONAL}</option>
+              <option value="WORK">{AREA.WORK}</option>
+            </select>
           </Field>
         )}
       </div>
@@ -294,7 +302,7 @@ export function ProjectPanel({
       <p className="font-mono text-xs text-faint">slug: {project.slug}</p>
       <button
         onClick={async () => {
-          if (!confirm("¿Borrar el proyecto? Sus tarjetas pasan a la bandeja.")) return;
+          if (!confirm("¿Borrar el proyecto? Sus tarjetas pasan a Ideas sueltas.")) return;
           await api.deleteProject(project.id);
           onDeleted();
         }}

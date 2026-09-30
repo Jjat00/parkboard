@@ -8,7 +8,10 @@ import { CARD_W } from "@/lib/layout";
 import { AGENT_LABEL } from "@/lib/session";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
 
-export type ProjectNode = Node<{ project: ProjectDTO; open: number; empty: boolean }, "project">;
+export type ProjectNode = Node<
+  { project: Omit<ProjectDTO, "area"> & { area: ProjectDTO["area"] | null }; open: number; empty: boolean; inbox?: boolean },
+  "project"
+>;
 export type CardNode = Node<{ card: CardDTO; expanded: boolean; height: number; onToggle: (id: string) => void }, "card">;
 
 const KIND_ICON: Record<KindKey, typeof Bug> = {
@@ -27,16 +30,25 @@ const STATUS_DOT: Record<StatusKey, string> = {
 };
 
 export const ProjectGroup = memo(function ProjectGroup({ data, width, height }: NodeProps<ProjectNode>) {
-  const { project, open, empty } = data;
+  const { project, open, empty, inbox } = data;
   return (
-    <div className="rounded-2xl border bg-panel/40" style={{ borderColor: `${project.color}55`, width, height }}>
+    <div
+      className={`rounded-2xl border ${inbox ? "border-dashed bg-transparent" : "bg-panel/40"}`}
+      style={{ borderColor: `${project.color}55`, width, height }}
+    >
       <div className="flex h-[46px] items-center gap-2.5 px-4" style={{ borderBottom: `1px solid ${project.color}26` }}>
-        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: project.color }} />
+        {inbox ? (
+          <Lightbulb size={13} className="shrink-0 text-muted" />
+        ) : (
+          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: project.color }} />
+        )}
         <h2 className="truncate text-[13px] font-semibold tracking-tight text-fg">{project.name}</h2>
-        <span className="font-mono text-[10px] text-faint">{AREA[project.area]}</span>
+        {project.area && <span className="font-mono text-[10px] text-faint">{AREA[project.area]}</span>}
         <span className="ml-auto shrink-0 font-mono text-[10px] text-faint">{open}</span>
       </div>
-      {empty && <p className="px-4 py-3 text-xs text-faint">Sin tareas visibles</p>}
+      {empty && (
+        <p className="px-4 py-3 text-xs text-faint">{inbox ? "Suelta aquí ideas sin proyecto" : "Sin tareas visibles"}</p>
+      )}
     </div>
   );
 });

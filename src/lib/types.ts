@@ -21,7 +21,8 @@ export type CardDTO = {
   status: StatusKey;
   priority: PriorityKey;
   kind: KindKey;
-  area: AreaKey;
+  /** Only for cards without project; null = loose idea. */
+  area: AreaKey | null;
   links: Link[];
   tags: string[];
   origin: string;

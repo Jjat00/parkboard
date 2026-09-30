@@ -15,7 +15,7 @@ const ENUMS = {
   status: ["idea", "pending", "doing", "done"],
   priority: ["low", "medium", "high", "urgent"],
   kind: ["task", "idea", "bug", "research", "note"],
-  area: ["personal", "work"],
+  area: ["personal", "work", "none"],
 };
 
 const SCHEMA = {
@@ -32,7 +32,7 @@ const SCHEMA = {
         "--status": ENUMS.status.join("|") + " (default pending)",
         "--priority": ENUMS.priority.join("|") + " (default medium)",
         "--kind": ENUMS.kind.join("|") + " (default task)",
-        "--area": ENUMS.area.join("|") + " (only for cards without project, or a new project)",
+        "--area": ENUMS.area.join("|") + " (cards without project; none = loose idea, the default)",
         "--tag": "repeatable",
         "--link": "repeatable URL",
         "--summary": "what the conversation was about, to pick it up cold (alias --session)",
@@ -124,7 +124,7 @@ function cardBody(v) {
     status: upper("status", v.status),
     priority: upper("priority", v.priority),
     kind: upper("kind", v.kind),
-    area: upper("area", v.area),
+    area: v.area?.toLowerCase() === "none" ? null : upper("area", v.area),
     tags: v.tag,
     links: v.link?.map((url) => {
       try {
@@ -195,7 +195,7 @@ const color = (c, s) => (process.stdout.isTTY && !process.env.NO_COLOR ? COLORS[
 const PRIO = { LOW: "dim", MEDIUM: "cyan", HIGH: "yellow", URGENT: "red" };
 
 function line(card) {
-  const where = card.project?.slug ?? "inbox";
+  const where = card.project?.slug ?? "ideas";
   const prio = color(PRIO[card.priority], card.priority.toLowerCase().padEnd(6));
   return `${color("dim", card.id)}  ${prio} ${card.status.toLowerCase().padEnd(7)} ${color("bold", card.title)} ${color("dim", `[${where}]`)}`;
 }
@@ -204,7 +204,7 @@ function detail(card) {
   const rows = [
     [color("bold", card.title)],
     ["id", card.id],
-    ["project", card.project?.name ?? "inbox"],
+    ["project", card.project?.name ?? "ideas sueltas"],
     ["status", card.status.toLowerCase()],
     ["priority", card.priority.toLowerCase()],
     ["kind", card.kind.toLowerCase()],

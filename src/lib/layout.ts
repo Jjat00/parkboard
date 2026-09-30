@@ -1,6 +1,7 @@
 import type { CardDTO, ProjectDTO } from "./types";
 
 export const CARD_W = 240;
+export const INBOX_ID = "__inbox";
 export const COMPACT_H = 64;
 export const EXPANDED_H = 196;
 const GAP = 10;

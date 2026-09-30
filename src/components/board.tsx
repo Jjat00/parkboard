@@ -17,7 +17,7 @@ import { UserButton } from "@clerk/nextjs";
 import { ChevronsDownUp, ChevronsUpDown, FolderPlus, KeyRound, Plus, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { AREA, type AreaKey } from "@/lib/labels";
-import { CARD_W, COMPACT_H, EXPANDED_H, layoutProject, resolveOverlaps } from "@/lib/layout";
+import { CARD_W, INBOX_ID, layoutProject, resolveOverlaps } from "@/lib/layout";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
 import { nodeTypes, type CardNode, type ProjectNode } from "./nodes";
 import { CardPanel, KeysPanel, ProjectPanel } from "./panels";
@@ -61,7 +61,21 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
     const rects = new Map<string, Rect>(
       shownProjects.map((p) => [p.id, { ...positions.get(p.id)!, width: layouts.get(p.id)!.width, height: layouts.get(p.id)!.height }]),
     );
-    return { visible, shownProjects, layouts, rects, isExpanded };
+    // Cards without project live in the "Ideas sueltas" group, left of the projects.
+    const loose = visible.filter((c) => !c.projectId);
+    const showInbox = filters.area === "ALL" || loose.length > 0;
+    if (showInbox) {
+      const inbox = layoutProject(loose, isExpanded);
+      layouts.set(INBOX_ID, inbox);
+      const xs = [...rects.values()];
+      rects.set(INBOX_ID, {
+        x: (xs.length ? Math.min(...xs.map((r) => r.x)) : 0) - inbox.width - 80,
+        y: xs.length ? Math.min(...xs.map((r) => r.y)) : 0,
+        width: inbox.width,
+        height: inbox.height,
+      });
+    }
+    return { visible, shownProjects, layouts, rects, isExpanded, showInbox };
   }, [projects, cards, filters, expanded]);
 }
 
@@ -111,7 +125,7 @@ function Canvas({ initial }: { initial: BoardData }) {
   );
 
   useEffect(() => {
-    const { visible, shownProjects, layouts, rects, isExpanded } = layout;
+    const { visible, shownProjects, layouts, rects, isExpanded, showInbox } = layout;
     const selectedId = selection?.id;
     const projectNodes: ProjectNode[] = shownProjects.map((p) => {
       const r = rects.get(p.id)!;
@@ -130,16 +144,36 @@ function Canvas({ initial }: { initial: BoardData }) {
         },
       };
     });
+    if (showInbox) {
+      const r = rects.get(INBOX_ID)!;
+      projectNodes.unshift({
+        id: INBOX_ID,
+        type: "project",
+        position: { x: r.x, y: r.y },
+        width: r.width,
+        height: r.height,
+        zIndex: 0,
+        draggable: false,
+        selectable: false,
+        data: {
+          project: { id: INBOX_ID, slug: "", name: "Ideas sueltas", area: null, color: "#a1a09a", x: r.x, y: r.y, width: r.width, height: r.height },
+          open: data.cards.filter((c) => !c.projectId && c.status !== "DONE").length,
+          empty: layouts.get(INBOX_ID)!.cards.size === 0,
+          inbox: true,
+        },
+      });
+    }
     const cardNodes: CardNode[] = visible
-      .filter((c) => !c.projectId || rects.has(c.projectId))
+      .filter((c) => rects.has(c.projectId ?? INBOX_ID))
       .map((c) => {
-        const inProject = c.projectId ? layouts.get(c.projectId)!.cards.get(c.id)! : null;
-        const height = inProject?.h ?? (isExpanded(c.id) ? EXPANDED_H : COMPACT_H);
+        const group = c.projectId ?? INBOX_ID;
+        const slot = layouts.get(group)!.cards.get(c.id)!;
+        const height = slot.h;
         return {
           id: c.id,
           type: "card",
-          position: inProject ? { x: inProject.x, y: inProject.y } : { x: c.x, y: c.y },
-          parentId: c.projectId ?? undefined,
+          position: { x: slot.x, y: slot.y },
+          parentId: group,
           width: CARD_W,
           height,
           zIndex: 10,
@@ -192,24 +226,20 @@ function Canvas({ initial }: { initial: BoardData }) {
       const abs = getInternalNode(node.id)?.internals.positionAbsolute;
       if (!card || !abs) return;
       const cx = abs.x + CARD_W / 2;
-      const cy = abs.y + (node.height ?? COMPACT_H) / 2;
-      let targetId: string | null = null;
+      const cy = abs.y + (node.height ?? 64) / 2;
+      let hit: string | null = null;
       for (const [id, r] of layout.rects) {
-        if (cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height) targetId = id;
+        if (cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height) hit = id;
       }
-      if (targetId && targetId === card.projectId) {
-        // Inside its own project the order is automatic: snap back.
+      const targetId = hit === INBOX_ID ? null : hit;
+      // Dropped on empty canvas or back on its own group: the order is automatic, snap back.
+      if (!hit || targetId === card.projectId) {
         setLayoutVersion((v) => v + 1);
         return;
       }
-      if (!targetId && !card.projectId) {
-        upsertCard({ ...card, x: abs.x, y: abs.y });
-        api.updateCard(card.id, { x: abs.x, y: abs.y }).catch(console.error);
-        return;
-      }
-      upsertCard({ ...card, projectId: targetId, x: abs.x, y: abs.y });
+      upsertCard({ ...card, projectId: targetId });
       api
-        .updateCard(card.id, targetId ? { project: targetId } : { project: null, x: abs.x, y: abs.y })
+        .updateCard(card.id, { project: targetId })
         .then(({ card: saved }) => upsertCard(saved))
         .catch(console.error);
     },
@@ -272,7 +302,9 @@ function Canvas({ initial }: { initial: BoardData }) {
           nodeTypes={nodeTypes}
           onNodeDragStart={() => (dragging.current = true)}
           onNodeDragStop={onNodeDragStop}
-          onNodeClick={(_, n) => setSelection({ kind: n.type === "project" ? "project" : "card", id: n.id })}
+          onNodeClick={(_, n) => {
+            if (n.id !== INBOX_ID) setSelection({ kind: n.type === "project" ? "project" : "card", id: n.id });
+          }}
           onPaneClick={() => setSelection(null)}
           fitView
           fitViewOptions={{ maxZoom: 1 }}
@@ -374,7 +406,7 @@ function Toolbar({
           onChange={(e) => setProjectId(e.target.value)}
           className="max-w-[160px] bg-transparent text-xs text-muted outline-none"
         >
-          <option value="">Bandeja</option>
+          <option value="">Ideas sueltas</option>
           {data.projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}

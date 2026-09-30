@@ -22,7 +22,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/cards/[id]">) 
   const { project, ...data } = body.data;
 
   let projectId = current.projectId;
-  if (project !== undefined) projectId = project ? (await resolveProject(actor.userId, project, data.area)).id : null;
+  if (project !== undefined) projectId = project ? (await resolveProject(actor.userId, project, data.area ?? undefined)).id : null;
   const moved = projectId !== current.projectId;
   const pos = moved && data.x === undefined ? await placeCard(actor.userId, projectId) : {};
   const doneAt =
@@ -30,7 +30,7 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/cards/[id]">) 
 
   const card = await db.card.update({
     where: { id },
-    data: { ...data, ...pos, projectId, doneAt },
+    data: { ...data, ...pos, projectId, doneAt, ...(projectId ? { area: null } : {}) },
     include: { project: { select: { slug: true, name: true, area: true } } },
   });
   return Response.json({ card });

@@ -21,7 +21,7 @@ export const CardInput = z.object({
   status: Status.optional(),
   priority: Priority.optional(),
   kind: Kind.optional(),
-  area: Area.optional(),
+  area: Area.nullish(),
   links: z.array(Link).max(30).optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
   origin: z.string().max(40).optional(),

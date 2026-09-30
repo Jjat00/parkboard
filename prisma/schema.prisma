@@ -62,8 +62,9 @@ model Card {
   status    Status    @default(PENDING)
   priority  Priority  @default(MEDIUM)
   kind      Kind      @default(TASK)
-  /// Area of a card without project. A card in a project uses the project's area.
-  area      Area      @default(PERSONAL)
+  /// Area of a card without project (null = a loose idea, neither personal nor work).
+  /// A card in a project uses the project's area.
+  area      Area?
   links     Json      @default("[]")
   tags      String[]  @default([])
   /// Who created it: "claude-code", "codex", "web", "cli"…
