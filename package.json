@@ -9,7 +9,7 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "db:migrate": "prisma migrate deploy",
-    "key:create": "tsx --env-file=.env scripts/create-key.ts",
+    "key:create": "tsx --env-file=.env scripts/create-key.mts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
