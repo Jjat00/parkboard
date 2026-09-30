@@ -151,10 +151,13 @@ export function CardPanel({
   onSaved,
   onDeleted,
   onClose,
+  track,
 }: {
   card: CardDTO;
   projects: ProjectDTO[];
   onSaved: (c: CardDTO) => void;
+  /** Registers a write with the board so a refresh started meanwhile is discarded. */
+  track: <T>(p: Promise<T>) => Promise<T>;
   onDeleted: (id: string) => void;
   onClose: () => void;
 }) {
@@ -176,9 +179,23 @@ export function CardPanel({
     });
   }
 
+  const draftRef = useRef(draft);
+  const dirtyRef = useRef(dirty);
+  useEffect(() => {
+    draftRef.current = draft;
+    dirtyRef.current = dirty;
+  }, [draft, dirty]);
+
+  // Saves run one after another: two quick edits of the same field can never reach the server
+  // in the wrong order, and each text save sends the field's latest value when its turn comes.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const enqueue = (task: () => Promise<unknown>) => {
+    queue.current = queue.current.then(task, task);
+  };
+
   const send = async (patch: Parameters<typeof api.updateCard>[1]) => {
     try {
-      const { card: saved } = await api.updateCard(card.id, patch);
+      const { card: saved } = await track(api.updateCard(card.id, patch));
       setError(null);
       onSaved(saved);
       return true;
@@ -193,35 +210,30 @@ export function CardPanel({
     setDirty((s) => new Set(s).add(key));
   };
 
-  const commit = (key: TextKey) => async () => {
-    if (!dirty.has(key)) return;
-    const value = draft[key];
-    if (key === "title" && !value.trim()) {
-      // A card needs a title: drop the empty edit instead of sending an invalid save.
-      setDraft((d) => ({ ...d, title: card.title }));
-      setDirty((s) => {
-        const next = new Set(s);
-        next.delete("title");
-        return next;
-      });
-      return;
-    }
-    const ok = await send(textPatch(key, value));
-    // Keep the field dirty if it changed again while the request was in flight.
-    if (ok)
-      setDirty((s) => {
-        const next = new Set(s);
-        if (draftRef.current[key] === value) next.delete(key);
-        return next;
-      });
-  };
-  const draftRef = useRef(draft);
-  useEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
+  const clean = (key: TextKey) =>
+    setDirty((s) => {
+      const next = new Set(s);
+      next.delete(key);
+      return next;
+    });
 
-  /** Selects, links and other one-click changes save right away. */
-  const save = (patch: Parameters<typeof api.updateCard>[1]) => send(patch);
+  const commit = (key: TextKey) =>
+    enqueue(async () => {
+      if (!dirtyRef.current.has(key)) return;
+      const value = draftRef.current[key];
+      if (key === "title" && !value.trim()) {
+        // A card needs a title: drop the empty edit instead of sending an invalid save.
+        setDraft((d) => ({ ...d, title: card.title }));
+        clean("title");
+        return;
+      }
+      const ok = await send(textPatch(key, value));
+      // Keep the field dirty if it changed again while the request was in flight.
+      if (ok && draftRef.current[key] === value) clean(key);
+    });
+
+  /** Selects, links and other one-click changes save right away, in the same queue. */
+  const save = (patch: Parameters<typeof api.updateCard>[1]) => enqueue(() => send(patch));
 
   const priorityLabels = Object.fromEntries(Object.entries(PRIORITY).map(([k, v]) => [k, v.label])) as Record<
     keyof typeof PRIORITY,
@@ -238,7 +250,7 @@ export function CardPanel({
       <textarea
         value={draft.title}
         onChange={(e) => edit("title", e.target.value)}
-        onBlur={commit("title")}
+        onBlur={() => commit("title")}
         rows={2}
         className="w-full resize-none bg-transparent text-lg leading-snug font-semibold text-fg outline-none"
       />
@@ -286,7 +298,7 @@ export function CardPanel({
         <textarea
           value={draft.notes}
           onChange={(e) => edit("notes", e.target.value)}
-          onBlur={commit("notes")}
+          onBlur={() => commit("notes")}
           rows={7}
           placeholder="Contexto, próximos pasos, por qué quedó para después…"
           className={`${input} resize-y font-mono text-[13px]`}
@@ -297,7 +309,7 @@ export function CardPanel({
         <input
           value={draft.tagsText}
           onChange={(e) => edit("tagsText", e.target.value)}
-          onBlur={commit("tagsText")}
+          onBlur={() => commit("tagsText")}
           className={input}
         />
       </Field>
@@ -342,7 +354,7 @@ export function CardPanel({
           <textarea
             value={draft.session ?? ""}
             onChange={(e) => edit("session", e.target.value)}
-            onBlur={commit("session")}
+            onBlur={() => commit("session")}
             rows={3}
             placeholder="Qué se estaba haciendo cuando quedó para después"
             className={`${input} resize-y text-xs`}
@@ -352,7 +364,7 @@ export function CardPanel({
           <input
             value={draft.vaultNote ?? ""}
             onChange={(e) => edit("vaultNote", e.target.value)}
-            onBlur={commit("vaultNote")}
+            onBlur={() => commit("vaultNote")}
             placeholder="Ideas/Nombre de la nota"
             className={`${input} font-mono text-xs`}
           />
@@ -378,11 +390,13 @@ export function ProjectPanel({
   onSave,
   onDeleted,
   onClose,
+  track,
 }: {
   project: ProjectDTO;
   onSave: (patch: Partial<ProjectDTO>) => void;
-  onDeleted: () => void;
+  onDeleted: (project: ProjectDTO) => void;
   onClose: () => void;
+  track: <T>(p: Promise<T>) => Promise<T>;
 }) {
   const [name, setName] = useState(project.name);
   return (
@@ -414,8 +428,8 @@ export function ProjectPanel({
       <button
         onClick={async () => {
           if (!confirm("¿Borrar el proyecto? Sus tarjetas pasan a Ideas sueltas.")) return;
-          await api.deleteProject(project.id);
-          onDeleted();
+          await track(api.deleteProject(project.id));
+          onDeleted(project);
         }}
         className="flex items-center gap-2 text-xs text-faint hover:text-[#fb7185]"
       >

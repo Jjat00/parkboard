@@ -116,6 +116,7 @@ function Canvas({ initial }: { initial: BoardData }) {
   const [showKeys, setShowKeys] = useState(false);
   const [layoutVersion, setLayoutVersion] = useState(0);
   const dragging = useRef(false);
+  const [draggingCard, setDraggingCard] = useState<string | null>(null);
   const { fitView, getInternalNode, screenToFlowPosition, setCenter } = useReactFlow();
 
   // Read after mount: localStorage does not exist on the server, and a lazy initial state would
@@ -240,18 +241,30 @@ function Canvas({ initial }: { initial: BoardData }) {
     setNodes([...projectNodes, ...cardNodes]);
   }, [layout, data.cards, selection, toggleExpanded, setNodes, layoutVersion, filters.sort]);
 
-  // Every local change bumps `mutations`; a refresh whose request started before the latest
-  // change (or before a newer refresh) is stale and dropped, and so is one landing mid-drag.
+  // Every local change bumps `mutations`, and every write is tracked in `pending` from request
+  // to response (bumping `mutations` again when it lands). A refresh is dropped when it starts
+  // or ends with writes in flight, when anything changed meanwhile, when a newer refresh
+  // started, or when it lands mid-drag: it could only show a state older than the screen.
   const mutations = useRef(0);
+  const pending = useRef(0);
   const refreshes = useRef(0);
+  const track = useCallback(<T,>(p: Promise<T>): Promise<T> => {
+    pending.current++;
+    mutations.current++;
+    return p.finally(() => {
+      pending.current--;
+      mutations.current++;
+    });
+  }, []);
   const refresh = useCallback(async () => {
-    if (dragging.current || document.visibilityState !== "visible") return;
+    if (dragging.current || pending.current || document.visibilityState !== "visible") return;
     const ticket = ++refreshes.current;
     const seenMutations = mutations.current;
     try {
       const board = await api.board();
-      if (ticket !== refreshes.current || seenMutations !== mutations.current || dragging.current) return;
-      setData(board);
+      const stale =
+        ticket !== refreshes.current || seenMutations !== mutations.current || pending.current || dragging.current;
+      if (!stale) setData(board);
     } catch (e) {
       console.error(e);
     }
@@ -277,15 +290,25 @@ function Canvas({ initial }: { initial: BoardData }) {
     });
   }, []);
 
-  const patchProject = useCallback((id: string, patch: Partial<ProjectDTO>) => {
-    mutations.current++;
-    setData((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
-    api.updateProject(id, patch).catch(console.error);
-  }, []);
+  const patchProject = useCallback(
+    (id: string, patch: Partial<ProjectDTO>) => {
+      mutations.current++;
+      setData((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
+      track(api.updateProject(id, patch))
+        .then(({ project }) => {
+          // Apply what the server saved for the fields this write changed.
+          const saved = Object.fromEntries(Object.keys(patch).map((k) => [k, project[k as keyof ProjectDTO]]));
+          setData((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, ...saved } : p)) }));
+        })
+        .catch(console.error);
+    },
+    [track],
+  );
 
   const onNodeDragStop = useCallback(
-    (_: unknown, node: Node) => {
+    (event: MouseEvent | TouchEvent, node: Node) => {
       dragging.current = false;
+      setDraggingCard(null);
       if (node.type === "project") {
         patchProject(node.id, { x: node.position.x, y: node.position.y });
         return;
@@ -295,9 +318,12 @@ function Canvas({ initial }: { initial: BoardData }) {
       if (!card || !abs) return;
       const cx = abs.x + CARD_W / 2;
       const cy = abs.y + (node.height ?? 64) / 2;
-      let hit: string | null = null;
-      for (const [id, r] of layout.rects) {
-        if (cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height) hit = id;
+      // The "Mover a…" rail wins: it lists every destination, including those this view hides.
+      let hit = dropTargetAt(event);
+      if (!hit) {
+        for (const [id, r] of layout.rects) {
+          if (cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height) hit = id;
+        }
       }
       const targetId = hit === INBOX_ID ? null : hit;
       // Dropped on empty canvas or back on its own group: the order is automatic, snap back.
@@ -306,42 +332,46 @@ function Canvas({ initial }: { initial: BoardData }) {
         return;
       }
       upsertCard({ ...card, projectId: targetId });
-      api
-        .updateCard(card.id, { project: targetId })
+      track(api.updateCard(card.id, { project: targetId }))
         .then(({ card: saved }) => upsertCard(saved))
-        .catch(console.error);
+        .catch((e) => {
+          console.error(e);
+          setLayoutVersion((v) => v + 1);
+        });
     },
-    [data.cards, layout.rects, getInternalNode, patchProject, upsertCard],
+    [data.cards, layout.rects, getInternalNode, patchProject, upsertCard, track],
   );
 
   const arrange = useCallback(() => {
     const positions = arrangeProjects(layout.shownProjects, layout.layouts);
     mutations.current++;
     setData((d) => ({ ...d, projects: d.projects.map((p) => ({ ...p, ...positions.get(p.id) })) }));
-    Promise.all([...positions].map(([id, pos]) => api.updateProject(id, pos))).catch(console.error);
+    track(Promise.all([...positions].map(([id, pos]) => api.updateProject(id, pos)))).catch(console.error);
     setTimeout(() => fitView({ duration: 400, maxZoom: 1 }), 50);
-  }, [layout.shownProjects, layout.layouts, fitView]);
+  }, [layout.shownProjects, layout.layouts, fitView, track]);
 
   const addCard = useCallback(
     async (title: string, projectId: string | null) => {
       const area = filters.area === "ALL" ? undefined : filters.area;
-      const { card } = await api.createCard({ title, project: projectId, area, kind: VIEWS[filters.view].kind, origin: "web" });
+      const { card } = await track(
+        api.createCard({ title, project: projectId, area, kind: VIEWS[filters.view].kind, origin: "web" }),
+      );
       upsertCard(card);
       setSelection({ kind: "card", id: card.id });
     },
-    [filters.area, filters.view, upsertCard],
+    [filters.area, filters.view, upsertCard, track],
   );
 
   const addProject = useCallback(
     async (name: string) => {
       const center = screenToFlowPosition({ x: window.innerWidth / 2 - 150, y: window.innerHeight / 2 - 60 });
       const area = filters.area === "ALL" ? "PERSONAL" : filters.area;
-      const { project } = await api.createProject({ name, area, x: center.x, y: center.y });
+      const { project } = await track(api.createProject({ name, area, x: center.x, y: center.y }));
       mutations.current++;
       setData((d) => ({ ...d, projects: [...d.projects, project] }));
       setSelection({ kind: "project", id: project.id });
     },
-    [filters.area, screenToFlowPosition],
+    [filters.area, screenToFlowPosition, track],
   );
 
   const focusProject = useCallback(
@@ -385,7 +415,10 @@ function Canvas({ initial }: { initial: BoardData }) {
           nodes={nodes}
           onNodesChange={onNodesChange}
           nodeTypes={nodeTypes}
-          onNodeDragStart={() => (dragging.current = true)}
+          onNodeDragStart={(_, n) => {
+            dragging.current = true;
+            if (n.type === "card") setDraggingCard(n.id);
+          }}
           deleteKeyCode={null}
           onNodeDragStop={onNodeDragStop}
           onNodeClick={(_, n) => {
@@ -407,6 +440,12 @@ function Canvas({ initial }: { initial: BoardData }) {
             nodeColor={(n) => (n.type === "project" ? `${(n.data as ProjectNode["data"]).project.color}33` : "#232323")}
           />
         </ReactFlow>
+        {draggingCard && (
+          <DropRail
+            projects={data.projects.filter((p) => filters.area === "ALL" || p.area === filters.area)}
+            current={data.cards.find((c) => c.id === draggingCard)?.projectId ?? null}
+          />
+        )}
         {showKeys && !selection && <KeysPanel onClose={() => setShowKeys(false)} />}
         {showDone && !selection && (
           <DonePanel
@@ -415,7 +454,9 @@ function Canvas({ initial }: { initial: BoardData }) {
             onOpen={(id) => setSelection({ kind: "card", id })}
             onReopen={(card) => {
               upsertCard({ ...card, status: "PENDING", doneAt: null });
-              api.updateCard(card.id, { status: "PENDING" }).then(({ card: saved }) => upsertCard(saved)).catch(console.error);
+              track(api.updateCard(card.id, { status: "PENDING" }))
+                .then(({ card: saved }) => upsertCard(saved))
+                .catch(console.error);
             }}
             onClose={() => setShowDone(false)}
           />
@@ -426,6 +467,7 @@ function Canvas({ initial }: { initial: BoardData }) {
             card={selectedCard}
             projects={data.projects}
             onSaved={upsertCard}
+            track={track}
             onDeleted={(id) => {
               mutations.current++;
               setData((d) => ({ ...d, cards: d.cards.filter((c) => c.id !== id) }));
@@ -439,15 +481,58 @@ function Canvas({ initial }: { initial: BoardData }) {
             key={selectedProject.id}
             project={selectedProject}
             onSave={(patch) => patchProject(selectedProject.id, patch)}
-            onDeleted={async () => {
+            track={track}
+            onDeleted={(project) => {
+              // Mirror the server: its cards become loose ideas with the project's area.
               setSelection(null);
               mutations.current++;
-              setData(await api.board());
+              setData((d) => ({
+                projects: d.projects.filter((p) => p.id !== project.id),
+                cards: d.cards.map((c) => (c.projectId === project.id ? { ...c, projectId: null, area: project.area } : c)),
+              }));
             }}
             onClose={() => setSelection(null)}
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/** Destination under the pointer when a card is dropped on the "Mover a…" rail. */
+function dropTargetAt(event: MouseEvent | TouchEvent): string | null {
+  const point = "changedTouches" in event ? event.changedTouches[0] : event;
+  if (!point) return null;
+  const el = document.elementFromPoint(point.clientX, point.clientY)?.closest<HTMLElement>("[data-drop-target]");
+  return el?.dataset.dropTarget ?? null;
+}
+
+/**
+ * Shown while a card is dragged: every destination, including projects the current view
+ * hides (Ideas and Notas only draw projects that already have some), so any card can move
+ * anywhere by dragging.
+ */
+function DropRail({ projects, current }: { projects: ProjectDTO[]; current: string | null }) {
+  const targets = [{ id: INBOX_ID, name: "Ideas sueltas", color: "#a1a09a" }, ...projects];
+  return (
+    <div className="pointer-events-none absolute inset-y-0 left-0 z-30 flex w-56 flex-col gap-1.5 overflow-y-auto border-r border-line bg-ink/90 p-3 backdrop-blur">
+      <p className="px-1 pb-1 text-[11px] text-faint">Mover a…</p>
+      {targets.map((t) => {
+        const here = (t.id === INBOX_ID ? null : t.id) === current;
+        return (
+          <div
+            key={t.id}
+            data-drop-target={t.id}
+            className={`pointer-events-auto flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors hover:border-cyan hover:bg-cyan/10 hover:text-fg ${
+              here ? "border-line text-faint" : "border-line text-muted"
+            }`}
+          >
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: t.color }} />
+            <span className="truncate">{t.name}</span>
+            {here && <span className="ml-auto text-[10px]">aquí</span>}
+          </div>
+        );
+      })}
     </div>
   );
 }

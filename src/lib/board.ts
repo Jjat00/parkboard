@@ -80,6 +80,9 @@ function freeSlot(taken: Box[], cols: number, origin: Box): Box {
   }
 }
 
+/** A write lost a race with a concurrent change; the API answers 409 and the caller retries. */
+export class ConflictError extends Error {}
+
 const isUniqueViolation = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 
 async function insertProject(ownerId: string, slug: string, input: z.infer<typeof ProjectInput>) {
@@ -133,7 +136,10 @@ export async function resolveProject(ownerId: string, ref: string, area?: z.infe
     return await insertProject(ownerId, slug, { name: ref, area });
   } catch (e) {
     if (!isUniqueViolation(e)) throw e;
-    return (await find())!;
+    // Created by someone else meanwhile, unless it was also deleted meanwhile.
+    const again = await find();
+    if (!again) throw new ConflictError("project deleted while resolving it");
+    return again;
   }
 }
 

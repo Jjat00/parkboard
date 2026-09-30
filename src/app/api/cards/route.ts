@@ -42,23 +42,25 @@ export async function POST(req: Request) {
   const body = await parseBody(req, CardInput);
   if (body.error) return body.error;
   const { project, x, y, ...data } = body.data;
-  const projectId = project ? (await resolveProject(actor.userId, project, data.area ?? undefined)).id : null;
-  const pos = x !== undefined && y !== undefined ? { x, y } : await placeCard(actor.userId, projectId);
-  const card = await db.card
-    .create({
-    data: {
-      ...data,
-      ...pos,
-      // A card in a project takes the area from it.
-      area: projectId ? null : (data.area ?? null),
-      ownerId: actor.userId,
-      projectId,
-      origin: data.origin ?? (actor.via === "key" ? actor.name : "web"),
-      doneAt: data.status === "DONE" ? new Date() : null,
-    },
+  try {
+    // Resolving and placing also read the project: all of it can lose a race with its deletion.
+    const projectId = project ? (await resolveProject(actor.userId, project, data.area ?? undefined)).id : null;
+    const pos = x !== undefined && y !== undefined ? { x, y } : await placeCard(actor.userId, projectId);
+    const card = await db.card.create({
+      data: {
+        ...data,
+        ...pos,
+        // A card in a project takes the area from it.
+        area: projectId ? null : (data.area ?? null),
+        ownerId: actor.userId,
+        projectId,
+        origin: data.origin ?? (actor.via === "key" ? actor.name : "web"),
+        doneAt: data.status === "DONE" ? new Date() : null,
+      },
       include: { project: { select: { slug: true, name: true, area: true } } },
-    })
-    .catch((e: unknown) => writeConflict(e));
-  if (card instanceof Response) return card;
-  return Response.json({ card }, { status: 201 });
+    });
+    return Response.json({ card }, { status: 201 });
+  } catch (e) {
+    return writeConflict(e);
+  }
 }

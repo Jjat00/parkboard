@@ -21,20 +21,28 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/cards/[id]">) 
   if (body.error) return body.error;
   const { project, ...data } = body.data;
 
-  // Only touch projectId when the caller asks for a move: writing back the value read above
-  // would undo a move made by a concurrent request.
-  let move = {};
-  if (project !== undefined) {
-    const projectId = project ? (await resolveProject(actor.userId, project, data.area ?? undefined)).id : null;
-    const pos = projectId !== current.projectId && data.x === undefined ? await placeCard(actor.userId, projectId) : {};
-    move = { projectId, ...pos, ...(projectId ? { area: null } : {}) };
-  }
   const doneAt =
     data.status === undefined ? undefined : data.status === "DONE" ? (current.doneAt ?? new Date()) : null;
 
   try {
+    // Only touch projectId when the caller asks for a move: writing back the value read above
+    // would undo a move made by a concurrent request.
+    let move = {};
+    // Without a move, the write only applies if the card is still where we read it, so an
+    // area edit is never judged against a stale project (a lost race answers 409).
+    let where: { projectId: string | null } | object = {};
+    if (project !== undefined) {
+      const projectId = project ? (await resolveProject(actor.userId, project, data.area ?? undefined)).id : null;
+      const pos = projectId !== current.projectId && data.x === undefined ? await placeCard(actor.userId, projectId) : {};
+      move = { projectId, ...pos, ...(projectId ? { area: null } : {}) };
+    } else if (data.area !== undefined) {
+      where = { projectId: current.projectId };
+      // A card inside a project takes its area from the project: it has none of its own.
+      if (current.projectId) data.area = null;
+    }
+
     const card = await db.card.update({
-      where: { id: current.id, ownerId: actor.userId },
+      where: { id: current.id, ownerId: actor.userId, ...where },
       data: { ...data, ...move, doneAt },
       include: { project: { select: { slug: true, name: true, area: true } } },
     });
