@@ -15,14 +15,26 @@ const EMPTY_H = 44;
 const STATUS_ORDER = { DOING: 0, PENDING: 1, IDEA: 2, DONE: 3 } as const;
 const PRIORITY_ORDER = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
 
-/** In progress first, then by priority, then oldest first. */
-export function sortCards(cards: CardDTO[]) {
-  return [...cards].sort(
-    (a, b) =>
+export const SORT_MODES = {
+  auto: "En curso y prioridad",
+  newest: "Más recientes",
+  oldest: "Más antiguas",
+  updated: "Última actualización",
+} as const;
+export type SortMode = keyof typeof SORT_MODES;
+
+/** auto: in progress first, then by priority, then oldest first. The rest sort by date. */
+export function sortCards(cards: CardDTO[], mode: SortMode = "auto") {
+  const by = {
+    auto: (a: CardDTO, b: CardDTO) =>
       STATUS_ORDER[a.status] - STATUS_ORDER[b.status] ||
       PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority] ||
       a.createdAt.localeCompare(b.createdAt),
-  );
+    newest: (a: CardDTO, b: CardDTO) => b.createdAt.localeCompare(a.createdAt),
+    oldest: (a: CardDTO, b: CardDTO) => a.createdAt.localeCompare(b.createdAt),
+    updated: (a: CardDTO, b: CardDTO) => b.updatedAt.localeCompare(a.updatedAt),
+  }[mode];
+  return [...cards].sort(by);
 }
 
 export type ProjectLayout = {
@@ -36,11 +48,15 @@ export type ProjectLayout = {
  * Packs a project's visible cards in up to three columns, each card going to the
  * shortest column, and sizes the project to fit them.
  */
-export function layoutProject(cards: CardDTO[], isExpanded: (id: string) => boolean): ProjectLayout {
+export function layoutProject(
+  cards: CardDTO[],
+  isExpanded: (id: string) => boolean,
+  mode: SortMode = "auto",
+): ProjectLayout {
   const cols = Math.max(1, Math.min(MAX_COLS, cards.length));
   const heights = Array<number>(cols).fill(0);
   const positions = new Map<string, { x: number; y: number; h: number }>();
-  for (const card of sortCards(cards)) {
+  for (const card of sortCards(cards, mode)) {
     const h = isExpanded(card.id) ? EXPANDED_H : COMPACT_H;
     const col = heights.indexOf(Math.min(...heights));
     positions.set(card.id, { x: PAD + col * (CARD_W + GAP), y: HEADER + TOP + heights[col], h });

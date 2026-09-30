@@ -4,7 +4,8 @@ import { memo } from "react";
 import type { Node, NodeProps } from "@xyflow/react";
 import { Bot, Bug, ChevronDown, ChevronUp, FlaskConical, Lightbulb, Link2, SquareCheck, StickyNote } from "lucide-react";
 import { AREA, KIND, PRIORITY, STATUS, type KindKey, type StatusKey } from "@/lib/labels";
-import { CARD_W } from "@/lib/layout";
+import { CARD_W, type SortMode } from "@/lib/layout";
+import { ago } from "@/lib/time";
 import { AGENT_LABEL } from "@/lib/session";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
 
@@ -12,7 +13,10 @@ export type ProjectNode = Node<
   { project: Omit<ProjectDTO, "area"> & { area: ProjectDTO["area"] | null }; open: number; empty: boolean; inbox?: boolean },
   "project"
 >;
-export type CardNode = Node<{ card: CardDTO; expanded: boolean; height: number; onToggle: (id: string) => void }, "card">;
+export type CardNode = Node<
+  { card: CardDTO; expanded: boolean; height: number; onToggle: (id: string) => void; sort: SortMode },
+  "card"
+>;
 
 const KIND_ICON: Record<KindKey, typeof Bug> = {
   TASK: SquareCheck,
@@ -54,7 +58,10 @@ export const ProjectGroup = memo(function ProjectGroup({ data, width, height }: 
 });
 
 export const CardItem = memo(function CardItem({ data, selected }: NodeProps<CardNode>) {
-  const { card, expanded, height, onToggle } = data;
+  const { card, expanded, height, onToggle, sort } = data;
+  // Show the date the board is sorted by.
+  const when = sort === "updated" ? card.updatedAt : card.createdAt;
+  const whenTitle = `${sort === "updated" ? "Actualizada" : "Creada"} ${new Date(when).toLocaleString("es-CO")}`;
   const Icon = KIND_ICON[card.kind];
   const done = card.status === "DONE";
   const urgent = card.priority === "HIGH" || card.priority === "URGENT";
@@ -117,12 +124,15 @@ export const CardItem = memo(function CardItem({ data, selected }: NodeProps<Car
                 {card.links.length}
               </span>
             )}
-            {card.agent && (
-              <span className="ml-auto flex items-center gap-1 font-mono">
-                <Bot size={10} />
-                {AGENT_LABEL[card.agent] ?? card.agent}
-              </span>
-            )}
+            <span className="ml-auto flex items-center gap-1 font-mono" title={whenTitle}>
+              {card.agent && (
+                <>
+                  <Bot size={10} />
+                  {AGENT_LABEL[card.agent] ?? card.agent} ·
+                </>
+              )}{" "}
+              {ago(when)}
+            </span>
           </div>
         </div>
       )}
@@ -132,7 +142,9 @@ export const CardItem = memo(function CardItem({ data, selected }: NodeProps<Car
           <Icon size={10} />
           <span>{KIND[card.kind]}</span>
           {urgent && <span style={{ color: PRIORITY[card.priority].color }}>· {PRIORITY[card.priority].label}</span>}
-          {card.agent && <span className="ml-auto font-mono">{AGENT_LABEL[card.agent] ?? card.agent}</span>}
+          <span className="ml-auto font-mono" title={whenTitle}>
+            {ago(when)}
+          </span>
         </div>
       )}
     </div>

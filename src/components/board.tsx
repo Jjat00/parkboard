@@ -14,20 +14,21 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { UserButton } from "@clerk/nextjs";
-import { ChevronsDownUp, ChevronsUpDown, FolderPlus, KeyRound, LayoutGrid, Plus, Search } from "lucide-react";
+import { ArrowDownUp, CircleCheck, ChevronsDownUp, ChevronsUpDown, FolderPlus, KeyRound, LayoutGrid, Plus, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { AREA, type AreaKey } from "@/lib/labels";
-import { arrangeProjects, CARD_W, INBOX_ID, layoutProject, resolveOverlaps } from "@/lib/layout";
+import { arrangeProjects, CARD_W, INBOX_ID, layoutProject, resolveOverlaps, SORT_MODES, type SortMode } from "@/lib/layout";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
 import { nodeTypes, type CardNode, type ProjectNode } from "./nodes";
-import { CardPanel, KeysPanel, ProjectPanel } from "./panels";
+import { CardPanel, DonePanel, KeysPanel, ProjectPanel } from "./panels";
 
 type BoardData = { projects: ProjectDTO[]; cards: CardDTO[] };
-type Filters = { area: AreaKey | "ALL"; showDone: boolean; q: string };
+type Filters = { area: AreaKey | "ALL"; q: string; sort: SortMode };
 type Rect = { x: number; y: number; width: number; height: number };
 
 const REFRESH_MS = 20_000;
 const EXPANDED_KEY = "parkboard.expanded";
+const SORT_KEY = "parkboard.sort";
 
 function cardArea(card: CardDTO, projects: Map<string, ProjectDTO>) {
   return card.projectId ? (projects.get(card.projectId)?.area ?? card.area) : card.area;
@@ -41,6 +42,15 @@ function loadExpanded(): Set<string> {
   }
 }
 
+function loadSort(): SortMode | null {
+  try {
+    const sort = localStorage.getItem(SORT_KEY);
+    return sort && sort in SORT_MODES ? (sort as SortMode) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Positions and sizes for everything on the canvas. Projects fit their visible cards. */
 function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: Set<string>) {
   return useMemo(() => {
@@ -48,14 +58,14 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
     const q = filters.q.trim().toLowerCase();
     const visible = cards.filter(
       (c) =>
-        (filters.showDone || c.status !== "DONE") &&
+        c.status !== "DONE" &&
         (filters.area === "ALL" || cardArea(c, byId) === filters.area) &&
         (!q || `${c.title} ${c.notes} ${c.tags.join(" ")}`.toLowerCase().includes(q)),
     );
     const shownProjects = projects.filter((p) => filters.area === "ALL" || p.area === filters.area);
     const isExpanded = (id: string) => expanded.has(id);
     const layouts = new Map(
-      shownProjects.map((p) => [p.id, layoutProject(visible.filter((c) => c.projectId === p.id), isExpanded)]),
+      shownProjects.map((p) => [p.id, layoutProject(visible.filter((c) => c.projectId === p.id), isExpanded, filters.sort)]),
     );
     const positions = resolveOverlaps(shownProjects, layouts);
     const rects = new Map<string, Rect>(
@@ -65,7 +75,7 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
     const loose = visible.filter((c) => !c.projectId);
     const showInbox = filters.area === "ALL" || loose.length > 0;
     if (showInbox) {
-      const inbox = layoutProject(loose, isExpanded);
+      const inbox = layoutProject(loose, isExpanded, filters.sort);
       layouts.set(INBOX_ID, inbox);
       const xs = [...rects.values()];
       rects.set(INBOX_ID, {
@@ -81,7 +91,8 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
 
 function Canvas({ initial }: { initial: BoardData }) {
   const [data, setData] = useState<BoardData>(initial);
-  const [filters, setFilters] = useState<Filters>({ area: "ALL", showDone: false, q: "" });
+  const [filters, setFilters] = useState<Filters>({ area: "ALL", q: "", sort: "auto" });
+  const [showDone, setShowDone] = useState(false);
   const [selection, setSelection] = useState<{ kind: "card" | "project"; id: string } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -92,8 +103,22 @@ function Canvas({ initial }: { initial: BoardData }) {
 
   // Read after mount: localStorage does not exist on the server, and a lazy initial state would
   // make the server and client render different toolbars.
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => setExpanded(loadExpanded()), []);
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setExpanded(loadExpanded());
+    const sort = loadSort();
+    if (sort) setFilters((f) => ({ ...f, sort }));
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, []);
+
+  const changeFilters = useCallback((f: Filters) => {
+    setFilters(f);
+    try {
+      localStorage.setItem(SORT_KEY, f.sort);
+    } catch {
+      /* storage blocked */
+    }
+  }, []);
 
   const toggleExpanded = useCallback((id: string) => {
     setExpanded((prev) => {
@@ -178,12 +203,12 @@ function Canvas({ initial }: { initial: BoardData }) {
           height,
           zIndex: 10,
           selected: selectedId === c.id,
-          data: { card: c, expanded: isExpanded(c.id), height, onToggle: toggleExpanded },
+          data: { card: c, expanded: isExpanded(c.id), height, onToggle: toggleExpanded, sort: filters.sort },
         };
       });
     // Parents must come before their children.
     setNodes([...projectNodes, ...cardNodes]);
-  }, [layout, data.cards, selection, toggleExpanded, setNodes, layoutVersion]);
+  }, [layout, data.cards, selection, toggleExpanded, setNodes, layoutVersion, filters.sort]);
 
   const refresh = useCallback(async () => {
     if (dragging.current || document.visibilityState !== "visible") return;
@@ -291,7 +316,13 @@ function Canvas({ initial }: { initial: BoardData }) {
       <Toolbar
         data={data}
         filters={filters}
-        setFilters={setFilters}
+        setFilters={changeFilters}
+        doneCount={data.cards.filter((c) => c.status === "DONE").length}
+        onOpenDone={() => {
+          setSelection(null);
+          setShowKeys(false);
+          setShowDone(true);
+        }}
         onAddCard={addCard}
         onAddProject={addProject}
         onFocusProject={focusProject}
@@ -300,6 +331,7 @@ function Canvas({ initial }: { initial: BoardData }) {
         onArrange={arrange}
         onOpenKeys={() => {
           setSelection(null);
+          setShowDone(false);
           setShowKeys(true);
         }}
       />
@@ -330,6 +362,18 @@ function Canvas({ initial }: { initial: BoardData }) {
           />
         </ReactFlow>
         {showKeys && !selection && <KeysPanel onClose={() => setShowKeys(false)} />}
+        {showDone && !selection && (
+          <DonePanel
+            cards={data.cards}
+            projects={data.projects}
+            onOpen={(id) => setSelection({ kind: "card", id })}
+            onReopen={(card) => {
+              upsertCard({ ...card, status: "PENDING", doneAt: null });
+              api.updateCard(card.id, { status: "PENDING" }).then(({ card: saved }) => upsertCard(saved)).catch(console.error);
+            }}
+            onClose={() => setShowDone(false)}
+          />
+        )}
         {selectedCard && (
           <CardPanel
             key={selectedCard.id}
@@ -371,6 +415,8 @@ function Toolbar({
   onSetAllExpanded,
   onArrange,
   onOpenKeys,
+  doneCount,
+  onOpenDone,
 }: {
   data: BoardData;
   filters: Filters;
@@ -381,6 +427,8 @@ function Toolbar({
   anyExpanded: boolean;
   onSetAllExpanded: (open: boolean) => void;
   onArrange: () => void;
+  doneCount: number;
+  onOpenDone: () => void;
   onOpenKeys: () => void;
 }) {
   const [title, setTitle] = useState("");
@@ -389,14 +437,14 @@ function Toolbar({
   const open = data.cards.filter((c) => c.status !== "DONE").length;
 
   return (
-    <header className="z-10 flex flex-wrap items-center gap-3 border-b border-line bg-ink/90 px-4 py-3 backdrop-blur">
+    <header className="z-10 flex flex-wrap items-center gap-2 border-b border-line bg-ink/90 px-4 py-3 backdrop-blur">
       <div className="flex items-baseline gap-2 pr-2">
         <span className="text-gradient text-lg font-semibold tracking-tight">Parkboard</span>
         <span className="font-mono text-[11px] text-faint">{open} abiertas</span>
       </div>
 
       <form
-        className="flex min-w-[280px] flex-1 items-center gap-2 rounded-lg border border-line bg-panel px-3 py-1.5 focus-within:border-cyan/60"
+        className="flex min-w-[220px] flex-1 items-center overflow-hidden gap-2 rounded-lg border border-line bg-panel px-3 py-1.5 focus-within:border-cyan/60"
         onSubmit={async (e) => {
           e.preventDefault();
           if (!title.trim()) return;
@@ -409,12 +457,12 @@ function Toolbar({
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Parquear algo para después…"
-          className="flex-1 bg-transparent text-sm outline-none placeholder:text-faint"
+          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-faint"
         />
         <select
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
-          className="max-w-[160px] bg-transparent text-xs text-muted outline-none"
+          className="w-[104px] shrink-0 truncate bg-transparent text-xs text-muted outline-none"
         >
           <option value="">Ideas sueltas</option>
           {data.projects.map((p) => (
@@ -447,15 +495,28 @@ function Toolbar({
         />
       </label>
 
-      <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
-        <input
-          type="checkbox"
-          checked={filters.showDone}
-          onChange={(e) => setFilters({ ...filters, showDone: e.target.checked })}
-          className="accent-[#68ddfd]"
-        />
-        Hechas
+      <label className="flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2 py-1.5 text-xs text-muted" title="Orden de las tareas">
+        <ArrowDownUp size={13} />
+        <select
+          value={filters.sort}
+          onChange={(e) => setFilters({ ...filters, sort: e.target.value as SortMode })}
+          className="bg-transparent outline-none"
+        >
+          {(Object.keys(SORT_MODES) as SortMode[]).map((m) => (
+            <option key={m} value={m}>
+              {SORT_MODES[m]}
+            </option>
+          ))}
+        </select>
       </label>
+
+      <button
+        onClick={onOpenDone}
+        className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
+        title="Tareas terminadas"
+      >
+        <CircleCheck size={14} /> Hechas <span className="font-mono text-faint">{doneCount}</span>
+      </button>
 
       <select
         value=""
@@ -465,7 +526,7 @@ function Toolbar({
         }}
         className="rounded-lg border border-line bg-panel px-2 py-1.5 text-xs text-muted outline-none"
       >
-        <option value="">Ir a proyecto…</option>
+        <option value="">Ir a…</option>
         {data.projects.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
@@ -502,25 +563,28 @@ function Toolbar({
       <button
         onClick={onArrange}
         className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
-        title="Ordenar los proyectos en columnas: trabajo primero, luego personal"
+        title="Acomodar: ordena los proyectos en columnas, trabajo primero"
+        aria-label="Acomodar proyectos"
       >
-        <LayoutGrid size={14} /> Acomodar
+        <LayoutGrid size={14} />
       </button>
 
       <button
         onClick={() => onSetAllExpanded(!anyExpanded)}
         className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
         title={anyExpanded ? "Compactar todas" : "Expandir todas"}
+        aria-label={anyExpanded ? "Compactar todas" : "Expandir todas"}
       >
         {anyExpanded ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
-        {anyExpanded ? "Compactar" : "Expandir"}
       </button>
 
       <button
         onClick={onOpenKeys}
+        title="Claves para el CLI y los agentes"
+        aria-label="Claves para el CLI"
         className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
       >
-        <KeyRound size={14} /> CLI
+        <KeyRound size={14} />
       </button>
 
       <UserButton />

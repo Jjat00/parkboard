@@ -36,5 +36,6 @@ export type CardDTO = {
   x: number;
   y: number;
   createdAt: string;
+  updatedAt: string;
   doneAt: string | null;
 };

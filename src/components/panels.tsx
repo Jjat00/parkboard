@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { Bot, Copy, ExternalLink, Trash2, X } from "lucide-react";
+import { Bot, CircleCheck, Copy, ExternalLink, Trash2, X } from "lucide-react";
 import { api, type ApiKeyDTO } from "@/lib/api";
 import { AREA, KIND, PRIORITY, STATUS, type AreaKey } from "@/lib/labels";
 import { AGENT_LABEL, resumeCommand } from "@/lib/session";
+import { ago, dayLabel } from "@/lib/time";
 import type { CardDTO, Link, ProjectDTO } from "@/lib/types";
 
 const COLORS = ["#68ddfd", "#9e8cfc", "#f5d90a", "#4ade80", "#fb7185", "#fb923c"];
@@ -385,6 +386,66 @@ export function KeysPanel({ onClose }: { onClose: () => void }) {
           </div>
         ))}
       </div>
+    </Shell>
+  );
+}
+
+export function DonePanel({
+  cards,
+  projects,
+  onOpen,
+  onReopen,
+  onClose,
+}: {
+  cards: CardDTO[];
+  projects: ProjectDTO[];
+  onOpen: (id: string) => void;
+  onReopen: (card: CardDTO) => void;
+  onClose: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const names = new Map(projects.map((p) => [p.id, p.name]));
+  const done = cards
+    .filter((c) => c.status === "DONE")
+    .filter((c) => !q.trim() || `${c.title} ${c.notes}`.toLowerCase().includes(q.trim().toLowerCase()))
+    .sort((a, b) => (b.doneAt ?? b.updatedAt).localeCompare(a.doneAt ?? a.updatedAt));
+  const groups = new Map<string, CardDTO[]>();
+  for (const c of done) {
+    const label = dayLabel(c.doneAt ?? c.updatedAt);
+    groups.set(label, [...(groups.get(label) ?? []), c]);
+  }
+
+  return (
+    <Shell title="Hechas" onClose={onClose}>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar en lo terminado" className={input} />
+      {done.length === 0 && <p className="text-sm text-faint">Todavía no hay tareas terminadas.</p>}
+      {[...groups].map(([label, items]) => (
+        <section key={label} className="space-y-1.5">
+          <h3 className="text-[11px] text-faint first-letter:uppercase">{label}</h3>
+          {items.map((c) => {
+            const span = c.doneAt ? ago(c.createdAt, new Date(c.doneAt).getTime()) : null;
+            const took = span && span !== "ahora" ? span.replace("hace ", "") : null;
+            return (
+              <div key={c.id} className="group flex items-start gap-2 rounded-lg border border-line px-3 py-2 hover:bg-raised">
+                <CircleCheck size={14} className="mt-0.5 shrink-0 text-[#4ade80]" />
+                <button onClick={() => onOpen(c.id)} className="min-w-0 flex-1 text-left">
+                  <p className="text-[13px] leading-snug text-fg">{c.title}</p>
+                  <p className="mt-0.5 font-mono text-[10.5px] text-faint">
+                    {c.projectId ? names.get(c.projectId) : "Ideas sueltas"}
+                    {took && ` · tomó ${took}`}
+                  </p>
+                </button>
+                <button
+                  onClick={() => onReopen(c)}
+                  className="shrink-0 text-[11px] text-faint opacity-0 group-hover:opacity-100 hover:text-cyan"
+                >
+                  Reabrir
+                </button>
+              </div>
+            );
+          })}
+        </section>
+      ))}
     </Shell>
   );
 }
