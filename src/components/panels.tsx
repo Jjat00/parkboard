@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { ExternalLink, Trash2, X } from "lucide-react";
+import { Bot, Copy, ExternalLink, Trash2, X } from "lucide-react";
 import { api, type ApiKeyDTO } from "@/lib/api";
 import { AREA, KIND, PRIORITY, STATUS, type AreaKey } from "@/lib/labels";
+import { AGENT_LABEL, resumeCommand } from "@/lib/session";
 import type { CardDTO, Link, ProjectDTO } from "@/lib/types";
 
 const COLORS = ["#68ddfd", "#9e8cfc", "#f5d90a", "#4ade80", "#fb7185", "#fb923c"];
@@ -19,6 +20,40 @@ function Shell({ title, onClose, children }: { title: string; onClose: () => voi
       </div>
       <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">{children}</div>
     </aside>
+  );
+}
+
+function SessionBox({ card }: { card: CardDTO }) {
+  const [copied, setCopied] = useState(false);
+  const command = resumeCommand(card);
+  return (
+    <div className="space-y-2.5 rounded-xl border border-line bg-panel/60 p-4">
+      <div className="flex items-center gap-2 text-[11px] text-faint">
+        <Bot size={13} />
+        <span>Origen</span>
+        <span className="ml-auto font-mono">{new Date(card.createdAt).toLocaleString("es-CO")}</span>
+      </div>
+      <p className="text-sm text-fg">
+        {card.agent ? (AGENT_LABEL[card.agent] ?? card.agent) : card.origin}
+        {card.cwd && <span className="ml-2 font-mono text-[11px] text-faint">{card.cwd}</span>}
+      </p>
+      {card.sessionId && <p className="font-mono text-[11px] break-all text-muted">sesión {card.sessionId}</p>}
+      {command && (
+        <div className="space-y-1.5">
+          <pre className="overflow-x-auto rounded-lg bg-ink p-2.5 font-mono text-[11px] whitespace-pre-wrap text-fg">{command}</pre>
+          <button
+            onClick={async () => {
+              await navigator.clipboard.writeText(command);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+            className="flex items-center gap-1.5 text-xs text-cyan hover:underline"
+          >
+            <Copy size={12} /> {copied ? "Copiado" : "Copiar comando para retomar la sesión"}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -181,18 +216,17 @@ export function CardPanel({
         </form>
       </div>
 
+      <SessionBox card={draft} />
+
       <div className="space-y-3 rounded-xl border border-line bg-panel/60 p-4">
-        <span className="text-[11px] text-faint">Origen</span>
-        <p className="font-mono text-xs text-muted">
-          {draft.origin} · {new Date(draft.createdAt).toLocaleString("es-CO")}
-        </p>
-        <Field label="Sesión donde nació">
+        <Field label="Resumen de la conversación">
           <textarea
             value={draft.session ?? ""}
             onChange={(e) => setDraft({ ...draft, session: e.target.value })}
             onBlur={saveText("session")}
-            rows={2}
-            className={`${input} resize-y font-mono text-xs`}
+            rows={3}
+            placeholder="Qué se estaba haciendo cuando quedó para después"
+            className={`${input} resize-y text-xs`}
           />
         </Field>
         <Field label="Nota del vault">

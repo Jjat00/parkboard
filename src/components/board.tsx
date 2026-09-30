@@ -11,93 +11,145 @@ import {
   useNodesState,
   useReactFlow,
   type Node,
-  type OnSelectionChangeParams,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { UserButton } from "@clerk/nextjs";
-import { FolderPlus, KeyRound, Plus, Search } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, FolderPlus, KeyRound, Plus, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { AREA, type AreaKey } from "@/lib/labels";
+import { CARD_W, COMPACT_H, EXPANDED_H, layoutProject, resolveOverlaps } from "@/lib/layout";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
 import { nodeTypes, type CardNode, type ProjectNode } from "./nodes";
 import { CardPanel, KeysPanel, ProjectPanel } from "./panels";
 
 type BoardData = { projects: ProjectDTO[]; cards: CardDTO[] };
 type Filters = { area: AreaKey | "ALL"; showDone: boolean; q: string };
+type Rect = { x: number; y: number; width: number; height: number };
 
-const CARD_W = 260;
-const CARD_H = 150;
 const REFRESH_MS = 20_000;
+const EXPANDED_KEY = "parkboard.expanded";
 
 function cardArea(card: CardDTO, projects: Map<string, ProjectDTO>) {
   return card.projectId ? (projects.get(card.projectId)?.area ?? card.area) : card.area;
 }
 
-function buildNodes(
-  { projects, cards }: BoardData,
-  filters: Filters,
-  selected: Set<string>,
-  onResized: ProjectNode["data"]["onResized"],
-): Node[] {
-  const byId = new Map(projects.map((p) => [p.id, p]));
-  const q = filters.q.trim().toLowerCase();
-  const visibleCard = (c: CardDTO) =>
-    (filters.showDone || c.status !== "DONE") &&
-    (filters.area === "ALL" || cardArea(c, byId) === filters.area) &&
-    (!q || `${c.title} ${c.notes} ${c.tags.join(" ")}`.toLowerCase().includes(q));
+function loadExpanded(): Set<string> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(EXPANDED_KEY) ?? "[]"));
+  } catch {
+    return new Set();
+  }
+}
 
-  const projectNodes: ProjectNode[] = projects.map((p) => ({
-    id: p.id,
-    type: "project",
-    position: { x: p.x, y: p.y },
-    width: p.width,
-    height: p.height,
-    zIndex: 0,
-    selected: selected.has(p.id),
-    hidden: filters.area !== "ALL" && p.area !== filters.area,
-    dragHandle: undefined,
-    data: { project: p, open: cards.filter((c) => c.projectId === p.id && c.status !== "DONE").length, onResized },
-  }));
-  const cardNodes: CardNode[] = cards.map((c) => ({
-    id: c.id,
-    type: "card",
-    position: { x: c.x, y: c.y },
-    parentId: c.projectId ?? undefined,
-    width: CARD_W,
-    height: CARD_H,
-    zIndex: 10,
-    selected: selected.has(c.id),
-    hidden: !visibleCard(c),
-    data: { card: c },
-  }));
-  // Parents must come before their children.
-  return [...projectNodes, ...cardNodes];
+/** Positions and sizes for everything on the canvas. Projects fit their visible cards. */
+function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: Set<string>) {
+  return useMemo(() => {
+    const byId = new Map(projects.map((p) => [p.id, p]));
+    const q = filters.q.trim().toLowerCase();
+    const visible = cards.filter(
+      (c) =>
+        (filters.showDone || c.status !== "DONE") &&
+        (filters.area === "ALL" || cardArea(c, byId) === filters.area) &&
+        (!q || `${c.title} ${c.notes} ${c.tags.join(" ")}`.toLowerCase().includes(q)),
+    );
+    const shownProjects = projects.filter((p) => filters.area === "ALL" || p.area === filters.area);
+    const isExpanded = (id: string) => expanded.has(id);
+    const layouts = new Map(
+      shownProjects.map((p) => [p.id, layoutProject(visible.filter((c) => c.projectId === p.id), isExpanded)]),
+    );
+    const positions = resolveOverlaps(shownProjects, layouts);
+    const rects = new Map<string, Rect>(
+      shownProjects.map((p) => [p.id, { ...positions.get(p.id)!, width: layouts.get(p.id)!.width, height: layouts.get(p.id)!.height }]),
+    );
+    return { visible, shownProjects, layouts, rects, isExpanded };
+  }, [projects, cards, filters, expanded]);
 }
 
 function Canvas({ initial }: { initial: BoardData }) {
   const [data, setData] = useState<BoardData>(initial);
   const [filters, setFilters] = useState<Filters>({ area: "ALL", showDone: false, q: "" });
   const [selection, setSelection] = useState<{ kind: "card" | "project"; id: string } | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [showKeys, setShowKeys] = useState(false);
+  const [layoutVersion, setLayoutVersion] = useState(0);
   const dragging = useRef(false);
   const { getInternalNode, screenToFlowPosition, setCenter } = useReactFlow();
 
-  const patchProject = useCallback((id: string, patch: Partial<ProjectDTO>) => {
-    setData((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
-    api.updateProject(id, patch).catch(console.error);
+  // Read after mount: localStorage does not exist on the server, and a lazy initial state would
+  // make the server and client render different toolbars.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setExpanded(loadExpanded()), []);
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem(EXPANDED_KEY, JSON.stringify([...next]));
+      } catch {
+        /* storage blocked */
+      }
+      return next;
+    });
   }, []);
 
-  const onResized = useCallback(
-    (id: string, width: number, height: number) => patchProject(id, { width, height }),
-    [patchProject],
+  const layout = useLayout(data, filters, expanded);
+
+  const setAllExpanded = useCallback(
+    (open: boolean) => {
+      const next = open ? new Set(layout.visible.map((c) => c.id)) : new Set<string>();
+      setExpanded(next);
+      try {
+        localStorage.setItem(EXPANDED_KEY, JSON.stringify([...next]));
+      } catch {
+        /* storage blocked */
+      }
+    },
+    [layout.visible],
   );
 
-  const selectedIds = useMemo(() => new Set(selection ? [selection.id] : []), [selection]);
-
   useEffect(() => {
-    setNodes(buildNodes(data, filters, selectedIds, onResized));
-  }, [data, filters, selectedIds, onResized, setNodes]);
+    const { visible, shownProjects, layouts, rects, isExpanded } = layout;
+    const selectedId = selection?.id;
+    const projectNodes: ProjectNode[] = shownProjects.map((p) => {
+      const r = rects.get(p.id)!;
+      return {
+        id: p.id,
+        type: "project",
+        position: { x: r.x, y: r.y },
+        width: r.width,
+        height: r.height,
+        zIndex: 0,
+        selected: selectedId === p.id,
+        data: {
+          project: p,
+          open: data.cards.filter((c) => c.projectId === p.id && c.status !== "DONE").length,
+          empty: layouts.get(p.id)!.cards.size === 0,
+        },
+      };
+    });
+    const cardNodes: CardNode[] = visible
+      .filter((c) => !c.projectId || rects.has(c.projectId))
+      .map((c) => {
+        const inProject = c.projectId ? layouts.get(c.projectId)!.cards.get(c.id)! : null;
+        const height = inProject?.h ?? (isExpanded(c.id) ? EXPANDED_H : COMPACT_H);
+        return {
+          id: c.id,
+          type: "card",
+          position: inProject ? { x: inProject.x, y: inProject.y } : { x: c.x, y: c.y },
+          parentId: c.projectId ?? undefined,
+          width: CARD_W,
+          height,
+          zIndex: 10,
+          selected: selectedId === c.id,
+          data: { card: c, expanded: isExpanded(c.id), height, onToggle: toggleExpanded },
+        };
+      });
+    // Parents must come before their children.
+    setNodes([...projectNodes, ...cardNodes]);
+  }, [layout, data.cards, selection, toggleExpanded, setNodes, layoutVersion]);
 
   const refresh = useCallback(async () => {
     if (dragging.current || document.visibilityState !== "visible") return;
@@ -124,6 +176,11 @@ function Canvas({ initial }: { initial: BoardData }) {
     });
   }, []);
 
+  const patchProject = useCallback((id: string, patch: Partial<ProjectDTO>) => {
+    setData((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)) }));
+    api.updateProject(id, patch).catch(console.error);
+  }, []);
+
   const onNodeDragStop = useCallback(
     (_: unknown, node: Node) => {
       dragging.current = false;
@@ -135,40 +192,35 @@ function Canvas({ initial }: { initial: BoardData }) {
       const abs = getInternalNode(node.id)?.internals.positionAbsolute;
       if (!card || !abs) return;
       const cx = abs.x + CARD_W / 2;
-      const cy = abs.y + CARD_H / 2;
-      const target = [...data.projects]
-        .reverse()
-        .find(
-          (p) =>
-            (filters.area === "ALL" || p.area === filters.area) &&
-            cx >= p.x && cx <= p.x + p.width && cy >= p.y && cy <= p.y + p.height,
-        );
-      const targetId = target?.id ?? null;
-      if (targetId === card.projectId) {
-        upsertCard({ ...card, x: node.position.x, y: node.position.y });
-        api.updateCard(card.id, { x: node.position.x, y: node.position.y }).catch(console.error);
+      const cy = abs.y + (node.height ?? COMPACT_H) / 2;
+      let targetId: string | null = null;
+      for (const [id, r] of layout.rects) {
+        if (cx >= r.x && cx <= r.x + r.width && cy >= r.y && cy <= r.y + r.height) targetId = id;
+      }
+      if (targetId && targetId === card.projectId) {
+        // Inside its own project the order is automatic: snap back.
+        setLayoutVersion((v) => v + 1);
         return;
       }
-      const x = target ? abs.x - target.x : abs.x;
-      const y = target ? abs.y - target.y : abs.y;
-      upsertCard({ ...card, projectId: targetId, x, y });
-      if (target && y + CARD_H + 20 > target.height) patchProject(target.id, { height: y + CARD_H + 20 });
-      api.updateCard(card.id, { project: targetId, x, y }).then(({ card: saved }) => upsertCard(saved)).catch(console.error);
+      if (!targetId && !card.projectId) {
+        upsertCard({ ...card, x: abs.x, y: abs.y });
+        api.updateCard(card.id, { x: abs.x, y: abs.y }).catch(console.error);
+        return;
+      }
+      upsertCard({ ...card, projectId: targetId, x: abs.x, y: abs.y });
+      api
+        .updateCard(card.id, targetId ? { project: targetId } : { project: null, x: abs.x, y: abs.y })
+        .then(({ card: saved }) => upsertCard(saved))
+        .catch(console.error);
     },
-    [data, filters.area, getInternalNode, patchProject, upsertCard],
+    [data.cards, layout.rects, getInternalNode, patchProject, upsertCard],
   );
-
-  const onSelectionChange = useCallback(({ nodes: sel }: OnSelectionChangeParams) => {
-    const n = sel[0];
-    setSelection(n ? { kind: n.type === "project" ? "project" : "card", id: n.id } : null);
-  }, []);
 
   const addCard = useCallback(
     async (title: string, projectId: string | null) => {
       const area = filters.area === "ALL" ? undefined : filters.area;
       const { card } = await api.createCard({ title, project: projectId, area, origin: "web" });
       upsertCard(card);
-      if (projectId) setData(await api.board());
       setSelection({ kind: "card", id: card.id });
     },
     [filters.area, upsertCard],
@@ -176,7 +228,7 @@ function Canvas({ initial }: { initial: BoardData }) {
 
   const addProject = useCallback(
     async (name: string) => {
-      const center = screenToFlowPosition({ x: window.innerWidth / 2 - 200, y: window.innerHeight / 2 - 150 });
+      const center = screenToFlowPosition({ x: window.innerWidth / 2 - 150, y: window.innerHeight / 2 - 60 });
       const area = filters.area === "ALL" ? "PERSONAL" : filters.area;
       const { project } = await api.createProject({ name, area, x: center.x, y: center.y });
       setData((d) => ({ ...d, projects: [...d.projects, project] }));
@@ -186,8 +238,11 @@ function Canvas({ initial }: { initial: BoardData }) {
   );
 
   const focusProject = useCallback(
-    (p: ProjectDTO) => setCenter(p.x + p.width / 2, p.y + p.height / 2, { zoom: 0.9, duration: 400 }),
-    [setCenter],
+    (p: ProjectDTO) => {
+      const r = layout.rects.get(p.id);
+      if (r) setCenter(r.x + r.width / 2, r.y + r.height / 2, { zoom: 1, duration: 400 });
+    },
+    [layout.rects, setCenter],
   );
 
   const selectedCard = selection?.kind === "card" ? data.cards.find((c) => c.id === selection.id) : undefined;
@@ -203,6 +258,8 @@ function Canvas({ initial }: { initial: BoardData }) {
         onAddCard={addCard}
         onAddProject={addProject}
         onFocusProject={focusProject}
+        anyExpanded={layout.visible.some((c) => expanded.has(c.id))}
+        onSetAllExpanded={setAllExpanded}
         onOpenKeys={() => {
           setSelection(null);
           setShowKeys(true);
@@ -215,13 +272,13 @@ function Canvas({ initial }: { initial: BoardData }) {
           nodeTypes={nodeTypes}
           onNodeDragStart={() => (dragging.current = true)}
           onNodeDragStop={onNodeDragStop}
-          onSelectionChange={onSelectionChange}
+          onNodeClick={(_, n) => setSelection({ kind: n.type === "project" ? "project" : "card", id: n.id })}
           onPaneClick={() => setSelection(null)}
           fitView
+          fitViewOptions={{ maxZoom: 1 }}
           minZoom={0.1}
           maxZoom={2}
           colorMode="dark"
-          proOptions={{ hideAttribution: false }}
         >
           <Background variant={BackgroundVariant.Dots} gap={24} size={1.2} />
           <Controls position="bottom-left" />
@@ -270,6 +327,8 @@ function Toolbar({
   onAddCard,
   onAddProject,
   onFocusProject,
+  anyExpanded,
+  onSetAllExpanded,
   onOpenKeys,
 }: {
   data: BoardData;
@@ -278,6 +337,8 @@ function Toolbar({
   onAddCard: (title: string, projectId: string | null) => Promise<void>;
   onAddProject: (name: string) => Promise<void>;
   onFocusProject: (p: ProjectDTO) => void;
+  anyExpanded: boolean;
+  onSetAllExpanded: (open: boolean) => void;
   onOpenKeys: () => void;
 }) {
   const [title, setTitle] = useState("");
@@ -395,6 +456,15 @@ function Toolbar({
           />
         </form>
       )}
+
+      <button
+        onClick={() => onSetAllExpanded(!anyExpanded)}
+        className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
+        title={anyExpanded ? "Compactar todas" : "Expandir todas"}
+      >
+        {anyExpanded ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+        {anyExpanded ? "Compactar" : "Expandir"}
+      </button>
 
       <button
         onClick={onOpenKeys}
