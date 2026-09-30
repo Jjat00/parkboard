@@ -43,4 +43,5 @@ next-env.d.ts
 # env and generated
 .env
 .env*.local
+!.env.example
 /src/generated/
