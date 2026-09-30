@@ -16,19 +16,20 @@ import "@xyflow/react/dist/style.css";
 import { UserButton } from "@clerk/nextjs";
 import { ArrowDownUp, CircleCheck, ChevronsDownUp, ChevronsUpDown, FolderPlus, KeyRound, LayoutGrid, Plus, Search } from "lucide-react";
 import { api } from "@/lib/api";
-import { AREA, type AreaKey } from "@/lib/labels";
+import { AREA, VIEWS, viewOf, type AreaKey, type ViewKey } from "@/lib/labels";
 import { arrangeProjects, CARD_W, INBOX_ID, layoutProject, resolveOverlaps, SORT_MODES, type SortMode } from "@/lib/layout";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
 import { nodeTypes, type CardNode, type ProjectNode } from "./nodes";
 import { CardPanel, DonePanel, KeysPanel, ProjectPanel } from "./panels";
 
 type BoardData = { projects: ProjectDTO[]; cards: CardDTO[] };
-type Filters = { area: AreaKey | "ALL"; q: string; sort: SortMode };
+type Filters = { area: AreaKey | "ALL"; q: string; sort: SortMode; view: ViewKey };
 type Rect = { x: number; y: number; width: number; height: number };
 
 const REFRESH_MS = 20_000;
 const EXPANDED_KEY = "parkboard.expanded";
 const SORT_KEY = "parkboard.sort";
+const VIEW_KEY = "parkboard.view";
 
 function cardArea(card: CardDTO, projects: Map<string, ProjectDTO>) {
   return card.projectId ? (projects.get(card.projectId)?.area ?? card.area) : card.area;
@@ -51,6 +52,15 @@ function loadSort(): SortMode | null {
   }
 }
 
+function loadView(): ViewKey | null {
+  try {
+    const view = localStorage.getItem(VIEW_KEY);
+    return view && view in VIEWS ? (view as ViewKey) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Positions and sizes for everything on the canvas. Projects fit their visible cards. */
 function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: Set<string>) {
   return useMemo(() => {
@@ -59,10 +69,17 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
     const visible = cards.filter(
       (c) =>
         c.status !== "DONE" &&
+        viewOf(c) === filters.view &&
         (filters.area === "ALL" || cardArea(c, byId) === filters.area) &&
         (!q || `#${c.number} ${c.title} ${c.notes} ${c.tags.join(" ")}`.toLowerCase().includes(q) || q === String(c.number)),
     );
-    const shownProjects = projects.filter((p) => filters.area === "ALL" || p.area === filters.area);
+    // Tasks show every project, even empty ones, so there is somewhere to drop cards. Ideas and
+    // notes only show the projects that have some.
+    const shownProjects = projects.filter(
+      (p) =>
+        (filters.area === "ALL" || p.area === filters.area) &&
+        (filters.view === "tasks" || visible.some((c) => c.projectId === p.id)),
+    );
     const isExpanded = (id: string) => expanded.has(id);
     const layouts = new Map(
       shownProjects.map((p) => [p.id, layoutProject(visible.filter((c) => c.projectId === p.id), isExpanded, filters.sort)]),
@@ -73,7 +90,7 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
     );
     // Cards without project live in the "Ideas sueltas" group, left of the projects.
     const loose = visible.filter((c) => !c.projectId);
-    const showInbox = filters.area === "ALL" || loose.length > 0;
+    const showInbox = loose.length > 0 || (filters.view === "tasks" && filters.area === "ALL");
     if (showInbox) {
       const inbox = layoutProject(loose, isExpanded, filters.sort);
       layouts.set(INBOX_ID, inbox);
@@ -91,7 +108,7 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
 
 function Canvas({ initial }: { initial: BoardData }) {
   const [data, setData] = useState<BoardData>(initial);
-  const [filters, setFilters] = useState<Filters>({ area: "ALL", q: "", sort: "auto" });
+  const [filters, setFilters] = useState<Filters>({ area: "ALL", q: "", sort: "auto", view: "tasks" });
   const [showDone, setShowDone] = useState(false);
   const [selection, setSelection] = useState<{ kind: "card" | "project"; id: string } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -107,7 +124,8 @@ function Canvas({ initial }: { initial: BoardData }) {
     /* eslint-disable react-hooks/set-state-in-effect */
     setExpanded(loadExpanded());
     const sort = loadSort();
-    if (sort) setFilters((f) => ({ ...f, sort }));
+    const view = loadView();
+    setFilters((f) => ({ ...f, ...(sort && { sort }), ...(view && { view }) }));
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
@@ -115,6 +133,7 @@ function Canvas({ initial }: { initial: BoardData }) {
     setFilters(f);
     try {
       localStorage.setItem(SORT_KEY, f.sort);
+      localStorage.setItem(VIEW_KEY, f.view);
     } catch {
       /* storage blocked */
     }
@@ -135,6 +154,17 @@ function Canvas({ initial }: { initial: BoardData }) {
   }, []);
 
   const layout = useLayout(data, filters, expanded);
+
+  // Each view has its own cards: frame them when switching instead of keeping the old viewport.
+  const firstView = useRef(true);
+  useEffect(() => {
+    if (firstView.current) {
+      firstView.current = false;
+      return;
+    }
+    const t = setTimeout(() => fitView({ duration: 300, maxZoom: 1 }), 50);
+    return () => clearTimeout(t);
+  }, [filters.view, fitView]);
 
   const setAllExpanded = useCallback(
     (open: boolean) => {
@@ -164,7 +194,7 @@ function Canvas({ initial }: { initial: BoardData }) {
         selected: selectedId === p.id,
         data: {
           project: p,
-          open: data.cards.filter((c) => c.projectId === p.id && c.status !== "DONE").length,
+          open: layouts.get(p.id)!.cards.size,
           empty: layouts.get(p.id)!.cards.size === 0,
         },
       };
@@ -182,7 +212,7 @@ function Canvas({ initial }: { initial: BoardData }) {
         selectable: false,
         data: {
           project: { id: INBOX_ID, slug: "", name: "Ideas sueltas", area: null, color: "#a1a09a", x: r.x, y: r.y, width: r.width, height: r.height, createdAt: "" },
-          open: data.cards.filter((c) => !c.projectId && c.status !== "DONE").length,
+          open: layouts.get(INBOX_ID)!.cards.size,
           empty: layouts.get(INBOX_ID)!.cards.size === 0,
           inbox: true,
         },
@@ -281,11 +311,11 @@ function Canvas({ initial }: { initial: BoardData }) {
   const addCard = useCallback(
     async (title: string, projectId: string | null) => {
       const area = filters.area === "ALL" ? undefined : filters.area;
-      const { card } = await api.createCard({ title, project: projectId, area, origin: "web" });
+      const { card } = await api.createCard({ title, project: projectId, area, kind: VIEWS[filters.view].kind, origin: "web" });
       upsertCard(card);
       setSelection({ kind: "card", id: card.id });
     },
-    [filters.area, upsertCard],
+    [filters.area, filters.view, upsertCard],
   );
 
   const addProject = useCallback(
@@ -434,13 +464,27 @@ function Toolbar({
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState<string>("");
   const [newProject, setNewProject] = useState<string | null>(null);
-  const open = data.cards.filter((c) => c.status !== "DONE").length;
+  const openBy = (view: ViewKey) => data.cards.filter((c) => c.status !== "DONE" && viewOf(c) === view).length;
 
   return (
     <header className="z-10 flex flex-wrap items-center gap-2 border-b border-line bg-ink/90 px-4 py-3 backdrop-blur">
       <div className="flex items-baseline gap-2 pr-2">
         <span className="text-gradient text-lg font-semibold tracking-tight">Parkboard</span>
-        <span className="font-mono text-[11px] text-faint">{open} abiertas</span>
+      </div>
+
+      <div className="flex items-center rounded-lg border border-line p-0.5 text-xs" role="tablist" aria-label="Vista">
+        {(Object.keys(VIEWS) as ViewKey[]).map((v) => (
+          <button
+            key={v}
+            role="tab"
+            aria-selected={filters.view === v}
+            onClick={() => setFilters({ ...filters, view: v })}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1 ${filters.view === v ? "bg-white/10 text-fg" : "text-muted hover:text-fg"}`}
+          >
+            {VIEWS[v].label}
+            <span className="font-mono text-[10px] text-faint">{openBy(v)}</span>
+          </button>
+        ))}
       </div>
 
       <form
@@ -456,7 +500,7 @@ function Toolbar({
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Parquear algo para después…"
+          placeholder={VIEWS[filters.view].placeholder}
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-faint"
         />
         <select

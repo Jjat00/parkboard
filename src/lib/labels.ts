@@ -22,6 +22,20 @@ export const KIND = {
 
 export const AREA = { PERSONAL: "Personal", WORK: "Trabajo" } as const;
 
+/** The canvas shows one view at a time so ideas and notes do not crowd the tasks. */
+export const VIEWS = {
+  tasks: { label: "Tareas", kind: "TASK", placeholder: "Parquear algo para después…" },
+  ideas: { label: "Ideas", kind: "IDEA", placeholder: "Anotar una idea…" },
+  notes: { label: "Notas", kind: "NOTE", placeholder: "Anotar algo para tener en cuenta…" },
+} as const satisfies Record<string, { label: string; kind: keyof typeof KIND; placeholder: string }>;
+
+export type ViewKey = keyof typeof VIEWS;
+
+/** Bugs and research live with the tasks. */
+export function viewOf(card: { kind: keyof typeof KIND }): ViewKey {
+  return card.kind === "IDEA" ? "ideas" : card.kind === "NOTE" ? "notes" : "tasks";
+}
+
 export type StatusKey = keyof typeof STATUS;
 export type PriorityKey = keyof typeof PRIORITY;
 export type KindKey = keyof typeof KIND;

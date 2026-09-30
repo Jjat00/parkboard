@@ -5,6 +5,7 @@ with a CLI so your coding agents can park things for you when you say "let's lea
 
 - **Canvas**: projects are resizable groups; cards move between them by dragging. Each card has status, priority,
   kind, notes, links, tags, and where it was born (origin and session).
+- **Tasks, Ideas and Notes views**: the canvas shows one at a time (bugs and research go with tasks), so ideas and notes do not crowd the work.
 - **Personal and work areas**, text filter, done cards hidden by default.
 - **CLI `park`** with no dependencies: JSON when piped, `--dry-run` on writes, `park schema` for agents.
 - **Private by default**: Clerk sign-in plus an email allowlist (`PARKBOARD_ALLOWED_EMAILS`). The CLI uses API
