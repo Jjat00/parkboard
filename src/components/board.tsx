@@ -88,9 +88,10 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
     const rects = new Map<string, Rect>(
       shownProjects.map((p) => [p.id, { ...positions.get(p.id)!, width: layouts.get(p.id)!.width, height: layouts.get(p.id)!.height }]),
     );
-    // Cards without project live in the "Ideas sueltas" group, left of the projects.
+    // Cards without project live in the "Ideas sueltas" group, left of the projects. It only
+    // shows when it has cards: ideas already have their own view, so Tareas does not need it empty.
     const loose = visible.filter((c) => !c.projectId);
-    const showInbox = loose.length > 0 || (filters.view === "tasks" && filters.area === "ALL");
+    const showInbox = loose.length > 0;
     if (showInbox) {
       const inbox = layoutProject(loose, isExpanded, filters.sort);
       layouts.set(INBOX_ID, inbox);
