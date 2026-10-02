@@ -3,6 +3,18 @@
 An infinite canvas for the things you park for later: tasks, ideas, bugs and research, grouped by project,
 with a CLI so your coding agents can park things for you when you say "let's leave that for later".
 
+![Parkboard: the Tasks view with cards grouped by project](docs/screenshot.png)
+
+## Why
+
+When you work with an AI agent (Claude Code, Codex or any other), one task keeps spawning others: a bug you spot
+while fixing something else, an idea for later, a check you should run before shipping. You stay on the main
+task, and by the end of the session those side tasks are lost in the conversation.
+
+Parkboard keeps them in one place. The agent parks each one as it comes up, with enough context to pick it up cold
+and a link back to the session where it was born. Every pending item stays visible on the canvas, and getting back
+to it is one card away.
+
 - **Canvas**: projects are resizable groups; cards move between them by dragging. Each card has status, priority,
   kind, notes, links, tags, and where it was born (origin and session).
 - **Tasks, Ideas and Notes views**: the canvas shows one at a time (bugs and research go with tasks), so ideas and notes do not crowd the work.
