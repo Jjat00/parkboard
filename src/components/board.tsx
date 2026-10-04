@@ -28,7 +28,8 @@ type Rect = { x: number; y: number; width: number; height: number };
 
 const REFRESH_MS = 20_000;
 const EXPANDED_KEY = "parkboard.expanded";
-const SORT_KEY = "parkboard.sort";
+// v2: the default became "oldest"; the new key drops the choice saved under the old default.
+const SORT_KEY = "parkboard.sort.v2";
 const VIEW_KEY = "parkboard.view";
 
 function cardArea(card: CardDTO, projects: Map<string, ProjectDTO>) {
@@ -109,7 +110,7 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
 
 function Canvas({ initial }: { initial: BoardData }) {
   const [data, setData] = useState<BoardData>(initial);
-  const [filters, setFilters] = useState<Filters>({ area: "ALL", q: "", sort: "auto", view: "tasks" });
+  const [filters, setFilters] = useState<Filters>({ area: "ALL", q: "", sort: "oldest", view: "tasks" });
   const [showDone, setShowDone] = useState(false);
   const [selection, setSelection] = useState<{ kind: "card" | "project"; id: string } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());

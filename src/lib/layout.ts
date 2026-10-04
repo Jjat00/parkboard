@@ -16,15 +16,15 @@ const STATUS_ORDER = { DOING: 0, PENDING: 1, IDEA: 2, DONE: 3 } as const;
 const PRIORITY_ORDER = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
 
 export const SORT_MODES = {
+  oldest: "Más antiguas",
   auto: "En curso y prioridad",
   newest: "Más recientes",
-  oldest: "Más antiguas",
   updated: "Última actualización",
 } as const;
 export type SortMode = keyof typeof SORT_MODES;
 
-/** auto: in progress first, then by priority, then oldest first. The rest sort by date. */
-export function sortCards(cards: CardDTO[], mode: SortMode = "auto") {
+/** oldest (default): creation order, so a plan reads top to bottom. auto: in progress first, then by priority, then oldest first. The rest sort by date. */
+export function sortCards(cards: CardDTO[], mode: SortMode = "oldest") {
   const by = {
     auto: (a: CardDTO, b: CardDTO) =>
       STATUS_ORDER[a.status] - STATUS_ORDER[b.status] ||
@@ -51,7 +51,7 @@ export type ProjectLayout = {
 export function layoutProject(
   cards: CardDTO[],
   isExpanded: (id: string) => boolean,
-  mode: SortMode = "auto",
+  mode: SortMode = "oldest",
 ): ProjectLayout {
   const cols = Math.max(1, Math.min(MAX_COLS, cards.length));
   const heights = Array<number>(cols).fill(0);
