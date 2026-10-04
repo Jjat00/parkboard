@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-const VERSION = "0.3.1";
+const VERSION = "0.3.2";
 const CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "parkboard", "config.json");
 const ENUMS = {
   status: ["idea", "pending", "doing", "done"],
@@ -23,6 +23,11 @@ const SCHEMA = {
   version: VERSION,
   description: "Park things for later on a Parkboard canvas.",
   card_reference: "a card is its short number (12 or #12, shown by park ls) or its full id",
+  conventions: [
+    "Big initiative, own project: when a piece of work needs several cards (a plan, a multi-phase feature, an investigation with follow-ups), create a dedicated project for it (e.g. ungga-crm next to ungga) instead of piling cards into the parent project. A project should stay readable at a glance.",
+    "Move existing cards that belong to the initiative into its project with park set <n> --project <slug>.",
+    "Search before adding (park ls -q) so the same thing is not parked twice.",
+  ],
   exit_codes: { 0: "ok", 1: "api or network error", 2: "usage error", 3: "not configured", 4: "not found" },
   commands: {
     add: {
@@ -69,7 +74,10 @@ Usage:
   park config --url https://… --key pk_…
   park schema            machine-readable description of every command
 
-Global: --json (forced when stdout is not a TTY), --help, --version`;
+Global: --json (forced when stdout is not a TTY), --help, --version
+
+Convention: a big initiative (a plan, a multi-phase feature) gets its own project
+(e.g. ungga-crm next to ungga) instead of piling cards into the parent project.`;
 
 const die = (code, msg) => {
   process.stderr.write(`park: ${msg}\n`);
