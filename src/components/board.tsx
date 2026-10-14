@@ -74,12 +74,14 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
         (filters.area === "ALL" || cardArea(c, byId) === filters.area) &&
         (!q || `#${c.number} ${c.title} ${c.notes} ${c.tags.join(" ")}`.toLowerCase().includes(q) || q === String(c.number)),
     );
-    // Tasks show every project, even empty ones, so there is somewhere to drop cards. Ideas and
-    // notes only show the projects that have some.
+    // A view only shows the projects with cards in it: a project holding only ideas is not an
+    // empty box in Tareas. A brand-new project with no open card at all still shows in Tareas,
+    // so there is somewhere to drop cards.
+    const open = new Set(cards.filter((c) => c.status !== "DONE").map((c) => c.projectId));
     const shownProjects = projects.filter(
       (p) =>
         (filters.area === "ALL" || p.area === filters.area) &&
-        (filters.view === "tasks" || visible.some((c) => c.projectId === p.id)),
+        (visible.some((c) => c.projectId === p.id) || (filters.view === "tasks" && !q && !open.has(p.id))),
     );
     const isExpanded = (id: string) => expanded.has(id);
     const layouts = new Map(
