@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-const VERSION = "0.3.3";
+const VERSION = "0.3.4";
 const CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "parkboard", "config.json");
 const ENUMS = {
   status: ["idea", "pending", "doing", "done"],
@@ -60,6 +60,8 @@ const SCHEMA = {
       flags: {
         "--area": "personal|work: the project's area (a work initiative belongs in work)",
         "--name": "rename the project (its slug stays the same)",
+        "--delete": "delete the project; its cards are kept and move to loose ideas (needs --yes)",
+        "--yes": "required with --delete: deletion is permanent",
         "--dry-run": "print the request, send nothing",
       },
       note: "a project is its slug, name or id, as park projects lists it",
@@ -81,6 +83,7 @@ Usage:
   park rm 12 --yes
   park projects
   park project ungga-mcp --area work [--name …]
+  park project ungga-mcp --delete --yes   (its cards move to loose ideas)
   park config --url https://… --key pk_…
   park schema            machine-readable description of every command
 
@@ -277,6 +280,7 @@ async function main() {
       url: { type: "string" },
       key: { type: "string" },
       yes: { type: "boolean" },
+      delete: { type: "boolean" },
       "dry-run": { type: "boolean" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
@@ -343,6 +347,7 @@ async function main() {
     case "project": {
       const ref = positionals.join(" ").trim();
       if (!ref) die(2, "project needs a project slug, e.g. park project ungga-mcp --area work (see `park projects`)");
+      if (v.delete && (v.area !== undefined || v.name !== undefined)) die(2, "--delete cannot be combined with --area or --name");
       const body = {};
       if (v.area !== undefined) {
         // A project always has an area: "none" only makes sense for loose cards.
@@ -353,12 +358,19 @@ async function main() {
         if (!v.name.trim()) die(2, "--name cannot be empty");
         body.name = v.name.trim();
       }
-      if (!Object.keys(body).length) die(2, "project needs at least one change, e.g. --area work");
+      if (!v.delete && !Object.keys(body).length) die(2, "project needs at least one change, e.g. --area work or --delete");
       const { projects } = await request("GET", "/api/projects");
       const r = ref.toLowerCase();
       const project = projects.find((p) => p.id === ref || p.slug === r) ?? projects.find((p) => p.name.toLowerCase() === r);
       if (!project) die(4, `no project "${ref}" (see park projects)`);
       const path = `/api/projects/${encodeURIComponent(project.id)}`;
+      if (v.delete) {
+        // The server keeps the cards: they lose the project and become loose ideas with its area.
+        if (v["dry-run"]) return print({ dry_run: true, request: { method: "DELETE", path } }, (d) => `would ${d.request.method} ${d.request.path}`);
+        if (!v.yes) die(2, "--delete is permanent: pass --yes to confirm (its cards move to loose ideas)");
+        await request("DELETE", path);
+        return print({ ok: true, project: project.slug }, (d) => `deleted ${d.project} (its cards are now loose ideas)`);
+      }
       if (v["dry-run"]) return print({ dry_run: true, request: { method: "PATCH", path, body } }, (d) => JSON.stringify(d.request, null, 2));
       const { project: updated } = await request("PATCH", path, body);
       return print(updated, (p) => `updated ${p.slug}  ${p.name}  ${color("dim", p.area.toLowerCase())}`);

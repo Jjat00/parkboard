@@ -44,6 +44,7 @@ park add "Try surfacer on the recon report" -p google-flow --kind research --pri
 park ls
 park done <id>
 park project ungga-crm --area work   # change a project's area (or --name to rename it)
+park project ungga-crm --delete --yes   # delete a project; its cards move to loose ideas
 ```
 
 Agents: `park schema` prints every command, flag and exit code as JSON.
