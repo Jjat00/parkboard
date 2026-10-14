@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-const VERSION = "0.3.2";
+const VERSION = "0.3.3";
 const CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "parkboard", "config.json");
 const ENUMS = {
   status: ["idea", "pending", "doing", "done"],
@@ -55,6 +55,15 @@ const SCHEMA = {
     done: { args: ["<card>"] },
     rm: { args: ["<card>"], flags: { "--yes": "required: deletion is permanent" } },
     projects: {},
+    project: {
+      args: ["<project>"],
+      flags: {
+        "--area": "personal|work: the project's area (a work initiative belongs in work)",
+        "--name": "rename the project (its slug stays the same)",
+        "--dry-run": "print the request, send nothing",
+      },
+      note: "a project is its slug, name or id, as park projects lists it",
+    },
     config: { flags: { "--url": "board URL", "--key": "API key (pk_…)" } },
     schema: {},
   },
@@ -71,6 +80,7 @@ Usage:
   park done 12
   park rm 12 --yes
   park projects
+  park project ungga-mcp --area work [--name …]
   park config --url https://… --key pk_…
   park schema            machine-readable description of every command
 
@@ -251,6 +261,7 @@ async function main() {
       priority: { type: "string" },
       kind: { type: "string" },
       area: { type: "string" },
+      name: { type: "string" },
       tag: { type: "string", multiple: true },
       link: { type: "string", multiple: true },
       session: { type: "string" },
@@ -328,6 +339,29 @@ async function main() {
       return print(projects, (ps) =>
         ps.map((p) => `${p.slug.padEnd(28)} ${String(p._count.cards).padStart(3)} open  ${color("dim", p.area.toLowerCase())}`).join("\n"),
       );
+    }
+    case "project": {
+      const ref = positionals.join(" ").trim();
+      if (!ref) die(2, "project needs a project slug, e.g. park project ungga-mcp --area work (see `park projects`)");
+      const body = {};
+      if (v.area !== undefined) {
+        // A project always has an area: "none" only makes sense for loose cards.
+        if (v.area.toLowerCase() === "none") die(2, "--area for a project must be personal or work");
+        body.area = upper("area", v.area);
+      }
+      if (v.name !== undefined) {
+        if (!v.name.trim()) die(2, "--name cannot be empty");
+        body.name = v.name.trim();
+      }
+      if (!Object.keys(body).length) die(2, "project needs at least one change, e.g. --area work");
+      const { projects } = await request("GET", "/api/projects");
+      const r = ref.toLowerCase();
+      const project = projects.find((p) => p.id === ref || p.slug === r) ?? projects.find((p) => p.name.toLowerCase() === r);
+      if (!project) die(4, `no project "${ref}" (see park projects)`);
+      const path = `/api/projects/${encodeURIComponent(project.id)}`;
+      if (v["dry-run"]) return print({ dry_run: true, request: { method: "PATCH", path, body } }, (d) => JSON.stringify(d.request, null, 2));
+      const { project: updated } = await request("PATCH", path, body);
+      return print(updated, (p) => `updated ${p.slug}  ${p.name}  ${color("dim", p.area.toLowerCase())}`);
     }
     case "config": {
       if (!v.url && !v.key) {

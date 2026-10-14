@@ -43,6 +43,7 @@ park config --url https://your-board.example.com --key pk_…
 park add "Try surfacer on the recon report" -p google-flow --kind research --priority high
 park ls
 park done <id>
+park project ungga-crm --area work   # change a project's area (or --name to rename it)
 ```
 
 Agents: `park schema` prints every command, flag and exit code as JSON.
