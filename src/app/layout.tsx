@@ -9,7 +9,7 @@ const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
 const jetbrains = JetBrains_Mono({ variable: "--font-jetbrains", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://parkboard.jaimeaza.tech"),
+  metadataBase: new URL("https://parkboard.jato.run"),
   title: "Parkboard",
   description: "Un lienzo para lo que queda para después.",
   robots: { index: false, follow: false },
