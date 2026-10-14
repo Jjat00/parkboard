@@ -8,12 +8,12 @@ const REPO = "https://github.com/Jjat00/parkboard";
 const COPY = {
   en: {
     signIn: "Sign in",
-    badge: "Private beta · public sign-up coming soon",
+    badge: "Free · sign in with Google",
+    start: "Start for free",
     title1: "Park it",
     title2: "for later.",
     lead: "An infinite canvas for the side tasks, ideas and bugs that come up while you work with an AI agent. Your agent parks each one with enough context to pick it up cold, and a link back to the session where it was born.",
     github: "View on GitHub",
-    selfHost: "Host your own",
     shotAlt: "Parkboard: the Tasks view with cards grouped by project",
     whyTitle: "Why",
     why: "One task keeps spawning others: a bug you spot while fixing something else, an idea for later, a check to run before shipping. You stay on the main task, and by the end of the session those side tasks are lost in the conversation. Parkboard keeps them in one place.",
@@ -34,19 +34,19 @@ const COPY = {
     ],
     cliTitle: "From the terminal",
     cliOut: "parked #13 Check the coupon with free shipping (shop)",
-    soonTitle: "Sign-up is not open yet",
-    soon: "This instance is private while Google sign-in moves to production. The code is public: run your own board in a few minutes.",
+    soonTitle: "Rather host it yourself?",
+    soon: "The code is public: run your own board on your own servers in a few minutes.",
     stack: "Next.js 16 · React 19 · React Flow · Prisma 7 on Postgres · Clerk",
     by: "Built by",
   },
   es: {
     signIn: "Iniciar sesión",
-    badge: "Beta privada · el registro abre pronto",
+    badge: "Gratis · entra con Google",
+    start: "Empieza gratis",
     title1: "Parquéalo",
     title2: "para después.",
     lead: "Un lienzo infinito para las tareas, ideas y bugs que salen mientras trabajas con un agente de IA. El agente parquea cada uno con el contexto justo para retomarlo en frío y un enlace a la sesión donde nació.",
     github: "Ver en GitHub",
-    selfHost: "Instálalo tú",
     shotAlt: "Parkboard: la vista Tareas con tarjetas agrupadas por proyecto",
     whyTitle: "Por qué",
     why: "Una tarea siempre trae otras: un bug que ves mientras arreglas algo más, una idea para luego, una revisión antes de publicar. Sigues con la tarea principal y, al final de la sesión, esas tareas laterales se pierden en la conversación. Parkboard las junta en un solo lugar.",
@@ -67,8 +67,8 @@ const COPY = {
     ],
     cliTitle: "Desde la terminal",
     cliOut: "parqueada #13 Revisar el cupón con envío gratis (tienda)",
-    soonTitle: "El registro aún no está abierto",
-    soon: "Esta instancia es privada mientras el inicio de sesión con Google pasa a producción. El código es público: monta tu propio tablero en unos minutos.",
+    soonTitle: "¿Prefieres tu propio servidor?",
+    soon: "El código es público: monta tu propio tablero en tus servidores en unos minutos.",
     stack: "Next.js 16 · React 19 · React Flow · Prisma 7 sobre Postgres · Clerk",
     by: "Hecho por",
   },
@@ -157,19 +157,19 @@ export function Landing({ lang }: { lang: Lang }) {
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">{c.lead}</p>
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href="/sign-up"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-fg px-5 py-2.5 text-sm font-medium text-ink transition-opacity hover:opacity-90 sm:w-auto"
+            >
+              {c.start}
+              <ArrowRight size={15} />
+            </Link>
             <a
               href={REPO}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-fg px-5 py-2.5 text-sm font-medium text-ink transition-opacity hover:opacity-90 sm:w-auto"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-line bg-panel/60 px-5 py-2.5 text-sm text-fg transition-colors hover:bg-raised sm:w-auto"
             >
               <GitHubMark />
               {c.github}
-            </a>
-            <a
-              href="#self-host"
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-line bg-panel/60 px-5 py-2.5 text-sm text-fg transition-colors hover:bg-raised sm:w-auto"
-            >
-              {c.selfHost}
-              <ArrowRight size={15} />
             </a>
           </div>
         </section>
