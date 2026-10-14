@@ -33,7 +33,7 @@ const SCHEMA = {
     add: {
       args: ["<title>"],
       flags: {
-        "-p, --project": "project name or slug; an unknown one is created",
+        "-p, --project": "project name or slug; an unknown one is created, and a project with no open cards left is deleted",
         "--notes": "longer context (markdown)",
         "--status": ENUMS.status.join("|") + " (default pending)",
         "--priority": ENUMS.priority.join("|") + " (default medium)",

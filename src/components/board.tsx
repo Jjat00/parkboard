@@ -302,7 +302,10 @@ function Canvas({ initial }: { initial: BoardData }) {
       if (!current) return { ...d, cards: [...d.cards, card] };
       // A save response that arrives after a newer one must not roll the card back.
       if (card.updatedAt < current.updatedAt) return d;
-      return { ...d, cards: d.cards.map((c) => (c.id === card.id ? card : c)) };
+      const next = { ...d, cards: d.cards.map((c) => (c.id === card.id ? card : c)) };
+      return current.projectId && (card.status === "DONE" || card.projectId !== current.projectId)
+        ? pruneLocal(next, current.projectId)
+        : next;
     });
   }, []);
 
@@ -496,7 +499,11 @@ function Canvas({ initial }: { initial: BoardData }) {
             serial={serial}
             onDeleted={(id) => {
               mutations.current++;
-              setData((d) => ({ ...d, cards: d.cards.filter((c) => c.id !== id) }));
+              setData((d) => {
+                const projectId = d.cards.find((c) => c.id === id)?.projectId;
+                const next = { ...d, cards: d.cards.filter((c) => c.id !== id) };
+                return projectId ? pruneLocal(next, projectId) : next;
+              });
               setSelection(null);
             }}
             onClose={() => setSelection(null)}
@@ -771,4 +778,17 @@ export function Board({ initial }: { initial: BoardData }) {
       <Canvas initial={initial} />
     </ReactFlowProvider>
   );
+}
+
+/**
+ * Mirrors the server: a project with no open card left is deleted, and its done cards become
+ * loose ideas with the project's area.
+ */
+function pruneLocal(d: BoardData, projectId: string): BoardData {
+  const project = d.projects.find((p) => p.id === projectId);
+  if (!project || d.cards.some((c) => c.projectId === projectId && c.status !== "DONE")) return d;
+  return {
+    projects: d.projects.filter((p) => p.id !== projectId),
+    cards: d.cards.map((c) => (c.projectId === projectId ? { ...c, projectId: null, area: project.area } : c)),
+  };
 }

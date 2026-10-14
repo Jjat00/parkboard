@@ -143,6 +143,31 @@ export async function resolveProject(ownerId: string, ref: string, area?: z.infe
   }
 }
 
+/**
+ * Deletes a project, keeping its cards: they move to loose ideas with the project's area.
+ * With `onlyIfEmpty`, it only goes when no open card is left (done cards don't keep it alive).
+ * Returns false when the project doesn't exist or still has open cards.
+ */
+export async function deleteProject(ownerId: string, id: string, { onlyIfEmpty = false } = {}) {
+  return db.$transaction(async (tx) => {
+    // Lock the project row: a card being created in it or moved into it waits on this lock
+    // (its foreign key check), so no card slips in between the check, the move and the delete.
+    const locked = await tx.$queryRaw<{ area: z.infer<typeof Area> }[]>`
+      SELECT "area" FROM "Project" WHERE "id" = ${id} AND "ownerId" = ${ownerId} FOR UPDATE`;
+    if (!locked.length) return false;
+    if (onlyIfEmpty && (await tx.card.count({ where: { ownerId, projectId: id, status: { not: "DONE" } } })))
+      return false;
+    await tx.card.updateMany({ where: { ownerId, projectId: id }, data: { projectId: null, area: locked[0].area } });
+    await tx.project.delete({ where: { id } });
+    return true;
+  });
+}
+
+/** A project lives only while it has open cards: drop it once the last one is done, moved or deleted. */
+export async function pruneProject(ownerId: string, projectId: string | null) {
+  return projectId ? deleteProject(ownerId, projectId, { onlyIfEmpty: true }) : false;
+}
+
 /** Where a new card goes when the caller gives no position, growing the project to fit. */
 export async function placeCard(ownerId: string, projectId: string | null) {
   const cards = await db.card.findMany({ where: { ownerId, projectId }, select: { x: true, y: true } });

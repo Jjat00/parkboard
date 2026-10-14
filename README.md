@@ -17,6 +17,8 @@ to it is one card away.
 
 - **Canvas**: projects are resizable groups; cards move between them by dragging. Each card has status, priority,
   kind, notes, links, tags, and where it was born (origin and session).
+- **Projects live while they have work**: parking into an unknown project creates it, and when its last open card is
+  done, moved or deleted the project goes away (its done cards stay as loose ideas).
 - **Tasks, Ideas and Notes views**: the canvas shows one at a time (bugs and research go with tasks), so ideas and notes do not crowd the work.
 - **Personal and work areas**, text filter, done cards hidden by default.
 - **CLI `park`** with no dependencies: JSON when piped, `--dry-run` on writes, `park schema` for agents.
