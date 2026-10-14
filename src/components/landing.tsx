@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Bot, FolderKanban, KeyRound, Layers, Lock, Terminal } from "lucide-react";
+import { ArrowRight, Bot, FolderKanban, KeyRound, Layers, Lock, Star, Terminal } from "lucide-react";
 import type { Lang } from "@/lib/lang";
 
 const REPO = "https://github.com/Jjat00/parkboard";
@@ -38,6 +38,10 @@ const COPY = {
     soon: "The code is public: run your own board on your own servers in a few minutes.",
     stack: "Next.js 16 · React 19 · React Flow · Prisma 7 on Postgres · Clerk",
     by: "Built by",
+    starNav: "Star on GitHub",
+    starTitle: "If it helps, leave a star",
+    starBody: "Parkboard is free and open source. A star on GitHub helps more people find it.",
+    starCta: "Star the repo",
   },
   es: {
     signIn: "Iniciar sesión",
@@ -71,6 +75,10 @@ const COPY = {
     soon: "El código es público: monta tu propio tablero en tus servidores en unos minutos.",
     stack: "Next.js 16 · React 19 · React Flow · Prisma 7 sobre Postgres · Clerk",
     by: "Hecho por",
+    starNav: "Estrella en GitHub",
+    starTitle: "Si te sirve, deja una estrella",
+    starBody: "Parkboard es gratis y de código abierto. Una estrella en GitHub ayuda a que más gente lo encuentre.",
+    starCta: "Dar una estrella",
   },
 } as const;
 
@@ -135,8 +143,9 @@ export function Landing({ lang }: { lang: Lang }) {
               href={REPO}
               className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-muted transition-colors hover:bg-raised hover:text-fg"
             >
-              <GitHubMark size={15} />
-              <span className="hidden sm:inline">GitHub</span>
+              <Star size={15} />
+              <span className="hidden sm:inline">{c.starNav}</span>
+              <span className="sm:hidden">GitHub</span>
             </a>
             <Link
               href="/sign-in"
@@ -256,6 +265,19 @@ export function Landing({ lang }: { lang: Lang }) {
               <span className="text-faint">$ </span>pnpm dev
             </pre>
           </div>
+        </section>
+
+        <section className="py-24 text-center">
+          <Star size={36} className="mx-auto text-cyan" fill="currentColor" />
+          <h2 className="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">{c.starTitle}</h2>
+          <p className="mx-auto mt-4 max-w-xl leading-relaxed text-muted">{c.starBody}</p>
+          <a
+            href={REPO}
+            className="mt-7 inline-flex items-center gap-2 rounded-lg bg-fg px-5 py-2.5 text-sm font-medium text-ink transition-opacity hover:opacity-90"
+          >
+            <GitHubMark />
+            {c.starCta}
+          </a>
         </section>
 
         <footer className="flex flex-col items-center justify-between gap-3 py-12 text-xs text-faint sm:flex-row">
