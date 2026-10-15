@@ -30,7 +30,7 @@ const COPY = {
       { icon: Bot, t: "Born in a session", d: "Every card remembers the agent, session and folder, so you can resume the conversation." },
       { icon: Terminal, t: "CLI for agents", d: "park has no dependencies: JSON when piped, --dry-run on writes, park schema for agents." },
       { icon: KeyRound, t: "API keys", d: "Bearer keys for the CLI, stored as SHA-256 hashes, created from the web." },
-      { icon: Lock, t: "Private by default", d: "One board per user, plus an optional email allowlist." },
+      { icon: Lock, t: "Encrypted at rest", d: "What you write is encrypted before it reaches the database. One board per user." },
     ],
     cliTitle: "From the terminal",
     cliOut: "parked #13 Check the coupon with free shipping (shop)",
@@ -38,6 +38,7 @@ const COPY = {
     soon: "The code is public: run your own board on your own servers in a few minutes.",
     stack: "Next.js 16 · React 19 · React Flow · Prisma 7 on Postgres · Clerk",
     by: "Built by",
+    privacy: "Privacy",
     starNav: "Star on GitHub",
     starTitle: "If it helps, leave a star",
     starBody: "Parkboard is free and open source. A star on GitHub helps more people find it.",
@@ -67,7 +68,7 @@ const COPY = {
       { icon: Bot, t: "Nace en una sesión", d: "Cada tarjeta recuerda el agente, la sesión y la carpeta, para retomar la conversación." },
       { icon: Terminal, t: "CLI para agentes", d: "park no tiene dependencias: JSON al encadenar, --dry-run al escribir, park schema para agentes." },
       { icon: KeyRound, t: "Claves de API", d: "Claves Bearer para el CLI, guardadas como hash SHA-256 y creadas desde la web." },
-      { icon: Lock, t: "Privado por defecto", d: "Un tablero por usuario y una lista opcional de correos permitidos." },
+      { icon: Lock, t: "Cifrado en reposo", d: "Lo que escribes se cifra antes de llegar a la base de datos. Un tablero por usuario." },
     ],
     cliTitle: "Desde la terminal",
     cliOut: "parqueada #13 Revisar el cupón con envío gratis (tienda)",
@@ -75,6 +76,7 @@ const COPY = {
     soon: "El código es público: monta tu propio tablero en tus servidores en unos minutos.",
     stack: "Next.js 16 · React 19 · React Flow · Prisma 7 sobre Postgres · Clerk",
     by: "Hecho por",
+    privacy: "Privacidad",
     starNav: "Estrella en GitHub",
     starTitle: "Si te sirve, deja una estrella",
     starBody: "Parkboard es gratis y de código abierto. Una estrella en GitHub ayuda a que más gente lo encuentre.",
@@ -282,11 +284,16 @@ export function Landing({ lang }: { lang: Lang }) {
 
         <footer className="flex flex-col items-center justify-between gap-3 py-12 text-xs text-faint sm:flex-row">
           <span className="font-mono">{c.stack}</span>
-          <span>
-            {c.by}{" "}
-            <a href="https://jaimeaza.tech" className="text-muted hover:text-fg">
-              Jaime Aza
-            </a>
+          <span className="flex items-center gap-4">
+            <Link href="/privacy" className="text-muted hover:text-fg">
+              {c.privacy}
+            </Link>
+            <span>
+              {c.by}{" "}
+              <a href="https://jaimeaza.tech" className="text-muted hover:text-fg">
+                Jaime Aza
+              </a>
+            </span>
           </span>
         </footer>
       </div>

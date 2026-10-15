@@ -22,8 +22,11 @@ to it is one card away.
 - **Tasks, Ideas and Notes views**: the canvas shows one at a time (bugs and research go with tasks), so ideas and notes do not crowd the work.
 - **Personal and work areas**, text filter, done cards hidden by default.
 - **CLI `park`** with no dependencies: JSON when piped, `--dry-run` on writes, `park schema` for agents.
-- **Private by default**: Clerk sign-in plus an email allowlist (`PARKBOARD_ALLOWED_EMAILS`). The CLI uses API
-  keys stored as SHA-256 hashes.
+- **Encrypted at rest**: titles, notes, links, tags, project names and session details are stored with
+  AES-256-GCM under a key kept outside the database (`PARKBOARD_ENCRYPTION_KEYS`), each value bound to its owner
+  and field. Projects are found by a keyed hash of their slug; text search decrypts in the server.
+- **Private by default**: one board per Clerk user, plus an optional email allowlist (`PARKBOARD_ALLOWED_EMAILS`).
+  The CLI uses API keys stored as SHA-256 hashes.
 
 Stack: Next.js 16, React 19, Tailwind 4, React Flow, Prisma 7 on Postgres, Clerk.
 
@@ -31,10 +34,13 @@ Stack: Next.js 16, React 19, Tailwind 4, React Flow, Prisma 7 on Postgres, Clerk
 
 ```bash
 pnpm install
-cp .env.example .env          # fill DATABASE_URL, Clerk keys and your email
+cp .env.example .env          # fill DATABASE_URL, Clerk keys, your email and an encryption key
 pnpm exec prisma migrate deploy
 pnpm dev
 ```
+
+Losing `PARKBOARD_ENCRYPTION_KEYS` means losing the data: keep a copy outside the database. To rotate it, prepend a
+new `id:key` to the ring and run `pnpm encrypt:existing`, which also encrypts rows written before encryption existed.
 
 ## CLI
 

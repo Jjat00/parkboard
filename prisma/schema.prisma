@@ -39,7 +39,9 @@ model Project {
   id        String   @id @default(cuid())
   /// Clerk user id. Every board belongs to one user.
   ownerId   String
+  /// Name and slug are encrypted (src/lib/crypto.ts); the slug is found by its blind index.
   slug      String
+  slugIndex String?
   name      String
   area      Area     @default(PERSONAL)
   color     String   @default("#68ddfd")
@@ -52,8 +54,11 @@ model Project {
   updatedAt DateTime @updatedAt
 
   @@unique([ownerId, slug])
+  @@unique([ownerId, slugIndex])
 }
 
+/// Title, notes, links, tags, session, sessionId, cwd and vaultNote are stored encrypted
+/// (src/lib/sealed.ts): links holds one sealed string, tags a single sealed element.
 model Card {
   id        String    @id @default(cuid())
   ownerId   String

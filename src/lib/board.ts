@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
+import { open } from "./crypto";
 import { db } from "./db";
+import { openCard, openProject, sealProject, slugWhere } from "./sealed";
 
 export const CARD_W = 260;
 export const CARD_H = 150;
@@ -88,11 +90,10 @@ const isUniqueViolation = (e: unknown) => e instanceof Prisma.PrismaClientKnownR
 async function insertProject(ownerId: string, slug: string, input: z.infer<typeof ProjectInput>) {
   const projects = await db.project.findMany({ where: { ownerId } });
   const right = projects.reduce((m, p) => Math.max(m, p.x + p.width), -80);
-  return db.project.create({
+  const project = await db.project.create({
     data: {
-      ...input,
+      ...sealProject(ownerId, { ...input, slug }),
       ownerId,
-      slug,
       color: input.color ?? PALETTE[projects.length % PALETTE.length],
       x: input.x ?? right + 80,
       y: input.y ?? 0,
@@ -100,19 +101,31 @@ async function insertProject(ownerId: string, slug: string, input: z.infer<typeo
       height: input.height ?? HEADER + CARD_H + PAD * 2,
     },
   });
+  return openProject(ownerId, project);
+}
+
+/**
+ * First of base, base-2, base-3… that none of the owner's projects uses. Slugs are stored
+ * encrypted, so candidates are looked up by their blind index, fifty at a time.
+ */
+async function freeSlug(ownerId: string, base: string) {
+  for (let from = 1; ; from += 50) {
+    const candidates = Array.from({ length: 50 }, (_, i) => (from + i === 1 ? base : `${base}-${from + i}`));
+    const taken = await db.project.findMany({
+      where: { ownerId, OR: slugWhere(ownerId, candidates) },
+      select: { slug: true },
+    });
+    const used = new Set(taken.map((p) => open(ownerId, "Project.slug", p.slug)));
+    const free = candidates.find((c) => !used.has(c));
+    if (free) return free;
+  }
 }
 
 /** Creates a new project; a repeated name gets the first free suffix (a, a-2, a-3…). */
 export async function createProject(ownerId: string, input: z.infer<typeof ProjectInput>) {
   const base = slugify(input.name);
   for (let attempt = 0; attempt < 5; attempt++) {
-    const taken = new Set(
-      (await db.project.findMany({ where: { ownerId, slug: { startsWith: base } }, select: { slug: true } })).map(
-        (p) => p.slug,
-      ),
-    );
-    let slug = base;
-    for (let n = 2; taken.has(slug); n++) slug = `${base}-${n}`;
+    const slug = await freeSlug(ownerId, base);
     try {
       return await insertProject(ownerId, slug, input);
     } catch (e) {
@@ -129,7 +142,10 @@ export async function createProject(ownerId: string, input: z.infer<typeof Proje
  */
 export async function resolveProject(ownerId: string, ref: string, area?: z.infer<typeof Area>) {
   const slug = slugify(ref);
-  const find = () => db.project.findFirst({ where: { ownerId, OR: [{ id: ref }, { slug }] } });
+  const find = async () => {
+    const p = await db.project.findFirst({ where: { ownerId, OR: [{ id: ref }, ...slugWhere(ownerId, [slug])] } });
+    return p && openProject(ownerId, p);
+  };
   const found = await find();
   if (found) return found;
   try {
@@ -185,7 +201,7 @@ export async function getBoard(ownerId: string) {
     db.project.findMany({ where: { ownerId }, orderBy: { createdAt: "asc" } }),
     db.card.findMany({ where: { ownerId }, orderBy: { createdAt: "asc" } }),
   ]);
-  return { projects, cards };
+  return { projects: projects.map((p) => openProject(ownerId, p)), cards: cards.map(openCard) };
 }
 
 /** Where-clause for one of the owner's cards by id or by its short number ("12" or "#12"). */

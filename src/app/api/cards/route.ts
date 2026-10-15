@@ -3,6 +3,7 @@ import { requireActor } from "@/lib/auth";
 import { CardInput, placeCard, resolveProject, slugify, Status } from "@/lib/board";
 import { db } from "@/lib/db";
 import { parseBody, writeConflict } from "@/lib/http";
+import { openCard, sealCard, slugWhere } from "@/lib/sealed";
 
 export async function GET(req: Request) {
   const actor = await requireActor(req);
@@ -17,22 +18,23 @@ export async function GET(req: Request) {
     where.status = parsed.data;
   }
   const project = params.get("project");
-  if (project) where.project = { OR: [{ id: project }, { slug: slugify(project) }] };
-  const q = params.get("q");
-  if (q) {
-    const n = /^#?(\d{1,9})$/.exec(q.trim());
-    where.OR = [
-      { title: { contains: q, mode: "insensitive" } },
-      { notes: { contains: q, mode: "insensitive" } },
-      ...(n ? [{ number: Number(n[1]) }] : []),
-    ];
-  }
-  const cards = await db.card.findMany({
+  if (project) where.project = { OR: [{ id: project }, ...slugWhere(actor.userId, [slugify(project)])] };
+  const limit = Math.min(Number(params.get("limit") ?? 100) || 100, 500);
+  const q = params.get("q")?.trim().toLowerCase();
+  const rows = await db.card.findMany({
     where,
     include: { project: { select: { slug: true, name: true, area: true } } },
     orderBy: [{ createdAt: "desc" }],
-    take: Math.min(Number(params.get("limit") ?? 100) || 100, 500),
+    // Title and notes are encrypted, so a text search decrypts the owner's cards and filters here.
+    take: q ? undefined : limit,
   });
+  let cards = rows.map(openCard);
+  if (q) {
+    const n = /^#?(\d{1,9})$/.exec(q);
+    cards = cards
+      .filter((c) => (n && c.number === Number(n[1])) || `${c.title}\n${c.notes}`.toLowerCase().includes(q))
+      .slice(0, limit);
+  }
   return Response.json({ cards });
 }
 
@@ -48,7 +50,7 @@ export async function POST(req: Request) {
     const pos = x !== undefined && y !== undefined ? { x, y } : await placeCard(actor.userId, projectId);
     const card = await db.card.create({
       data: {
-        ...data,
+        ...sealCard(actor.userId, data),
         ...pos,
         // A card in a project takes the area from it.
         area: projectId ? null : (data.area ?? null),
@@ -59,7 +61,7 @@ export async function POST(req: Request) {
       },
       include: { project: { select: { slug: true, name: true, area: true } } },
     });
-    return Response.json({ card }, { status: 201 });
+    return Response.json({ card: openCard(card) }, { status: 201 });
   } catch (e) {
     return writeConflict(e);
   }

@@ -2,6 +2,7 @@ import { requireActor } from "@/lib/auth";
 import { createProject, ProjectInput } from "@/lib/board";
 import { db } from "@/lib/db";
 import { parseBody } from "@/lib/http";
+import { openProject } from "@/lib/sealed";
 
 export async function GET(req: Request) {
   const actor = await requireActor(req);
@@ -11,7 +12,7 @@ export async function GET(req: Request) {
     orderBy: { createdAt: "asc" },
     include: { _count: { select: { cards: { where: { status: { not: "DONE" } } } } } },
   });
-  return Response.json({ projects });
+  return Response.json({ projects: projects.map((p) => openProject(actor.userId, p)) });
 }
 
 export async function POST(req: Request) {

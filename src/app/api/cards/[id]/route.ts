@@ -2,13 +2,14 @@ import { requireActor } from "@/lib/auth";
 import { cardRef, CardPatch, placeCard, pruneProject, resolveProject } from "@/lib/board";
 import { db } from "@/lib/db";
 import { notFound, parseBody, writeConflict } from "@/lib/http";
+import { openCard, sealCard } from "@/lib/sealed";
 
 export async function GET(req: Request, ctx: RouteContext<"/api/cards/[id]">) {
   const actor = await requireActor(req);
   if (actor instanceof Response) return actor;
   const { id } = await ctx.params;
   const card = await db.card.findFirst({ where: cardRef(actor.userId, id), include: { project: true } });
-  return card ? Response.json({ card }) : notFound();
+  return card ? Response.json({ card: openCard(card) }) : notFound();
 }
 
 export async function PATCH(req: Request, ctx: RouteContext<"/api/cards/[id]">) {
@@ -44,16 +45,17 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/cards/[id]">) 
     const include = { project: { select: { slug: true, name: true, area: true } } };
     const card = await db.card.update({
       where: { id: current.id, ownerId: actor.userId, ...where },
-      data: { ...data, ...move, doneAt },
+      data: { ...sealCard(actor.userId, data), ...move, doneAt },
       include,
     });
     // Closing or moving out the last open card deletes the project it leaves behind.
     const left = card.status === "DONE" || card.projectId !== current.projectId;
     if (left && (await pruneProject(actor.userId, current.projectId)) && card.projectId === current.projectId) {
       // The card was closed inside it: it is now a loose done card.
-      return Response.json({ card: await db.card.findUnique({ where: { id: card.id }, include }) });
+      const loose = await db.card.findUnique({ where: { id: card.id }, include });
+      return Response.json({ card: loose && openCard(loose) });
     }
-    return Response.json({ card });
+    return Response.json({ card: openCard(card) });
   } catch (e) {
     return writeConflict(e);
   }
