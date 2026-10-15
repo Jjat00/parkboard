@@ -230,7 +230,7 @@ export function Landing({ lang }: { lang: Lang }) {
             src="/screenshot.png"
             alt={c.shotAlt}
             width={3520}
-            height={1520}
+            height={1720}
             priority
             className="h-auto w-full rounded-xl border border-line"
           />
