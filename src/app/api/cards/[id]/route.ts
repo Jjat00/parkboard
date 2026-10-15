@@ -2,13 +2,13 @@ import { requireActor } from "@/lib/auth";
 import { cardRef, CardPatch, placeCard, pruneProject, resolveProject } from "@/lib/board";
 import { db } from "@/lib/db";
 import { notFound, parseBody, writeConflict } from "@/lib/http";
-import { openCard, sealCard } from "@/lib/sealed";
+import { CARD_PROJECT, cardUpdate, openCard } from "@/lib/sealed";
 
 export async function GET(req: Request, ctx: RouteContext<"/api/cards/[id]">) {
   const actor = await requireActor(req);
   if (actor instanceof Response) return actor;
   const { id } = await ctx.params;
-  const card = await db.card.findFirst({ where: cardRef(actor.userId, id), include: { project: true } });
+  const card = await db.card.findFirst({ where: cardRef(actor.userId, id), include: { project: CARD_PROJECT } });
   return card ? Response.json({ card: openCard(card) }) : notFound();
 }
 
@@ -42,10 +42,11 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/cards/[id]">) 
       if (current.projectId) data.area = null;
     }
 
-    const include = { project: { select: { slug: true, name: true, area: true } } };
+    const include = { project: CARD_PROJECT };
+    const write = cardUpdate(actor.userId, current, data);
     const card = await db.card.update({
-      where: { id: current.id, ownerId: actor.userId, ...where },
-      data: { ...sealCard(actor.userId, data), ...move, doneAt },
+      where: { id: current.id, ownerId: actor.userId, ...where, ...write.guard },
+      data: { ...write.data, ...move, doneAt },
       include,
     });
     // Closing or moving out the last open card deletes the project it leaves behind.

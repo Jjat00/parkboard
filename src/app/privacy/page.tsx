@@ -33,10 +33,11 @@ const COPY = {
       {
         t: "How it is protected",
         li: [
-          "Everything you write (titles, notes, links, tags, project names, session summary and id, folder and vault note) is encrypted with AES-256-GCM before it reaches the database. The key lives outside the database, so a copy of the database or its backups cannot be read.",
+          "Everything you write (titles, notes, links, tags, project names, origin, session summary and id, folder and vault note) is encrypted with AES-256-GCM before it reaches the database. The key lives outside the database, so a copy of the database or of its backups cannot be read without it.",
+          "Encryption started on October 14, 2026. Backups taken before that date may still hold that text in clear until the provider deletes them under its retention.",
           "Each value is bound to your account and its field: it cannot be moved into someone else’s account and read there.",
           "Traffic goes over HTTPS, and each user only ever sees their own board.",
-          "Not encrypted: the board metadata above, which the server needs to sort and draw the board, and the name you give each API key.",
+          "Not encrypted: the board metadata above (including the name of the agent that created a card), which the server needs to sort and draw the board, and the name you give each API key.",
         ],
       },
       {
@@ -64,9 +65,9 @@ const COPY = {
       {
         t: "Your rights",
         p: [
-          "Under Colombia’s Law 1581 of 2012 and, if you are in the EU, the GDPR, you can access, correct, export and delete your data. Edit or delete cards and projects from the board or the CLI; `park ls --status all --json` exports every card. To delete your whole account, write to " +
+          "Under Colombia’s Law 1581 of 2012 and, if you are in the EU, the GDPR, you can access, correct, export and delete your data. Edit or delete cards and projects from the board or the CLI; `park export` saves your whole board as JSON. To delete your whole account, write to " +
             CONTACT +
-            " and we will do it within 15 business days. Database backups rotate on the provider’s normal cycle, and what they hold stays encrypted.",
+            " and we will do it within 15 business days. Database backups expire on the provider’s normal cycle.",
         ],
       },
       {
@@ -105,10 +106,11 @@ const COPY = {
       {
         t: "Cómo lo protegemos",
         li: [
-          "Todo lo que escribes (títulos, notas, enlaces, etiquetas, nombres de proyecto, resumen e id de la sesión, carpeta y nota del vault) se cifra con AES-256-GCM antes de llegar a la base de datos. La clave vive fuera de la base, así que una copia de la base o de sus backups no sirve para leerlo.",
+          "Todo lo que escribes (títulos, notas, enlaces, etiquetas, nombres de proyecto, origen, resumen e id de la sesión, carpeta y nota del vault) se cifra con AES-256-GCM antes de llegar a la base de datos. La clave vive fuera de la base, así que una copia de la base o de sus backups no sirve para leerlo sin ella.",
+          "El cifrado empezó el 14 de octubre de 2026. Las copias de seguridad anteriores a esa fecha pueden conservar ese texto sin cifrar hasta que el proveedor las borre según su retención.",
           "Cada valor queda atado a tu cuenta y a su campo: no se puede mover a la cuenta de otra persona y leerlo ahí.",
           "La conexión va por HTTPS y cada usuario solo ve su propio tablero.",
-          "Sin cifrar quedan los datos del tablero de arriba, que el servidor necesita para ordenar y dibujar el lienzo, y el nombre que le pones a cada clave de API.",
+          "Sin cifrar quedan los datos del tablero de arriba (incluido el nombre del agente que creó cada tarjeta), que el servidor necesita para ordenar y dibujar el lienzo, y el nombre que le pones a cada clave de API.",
         ],
       },
       {
@@ -136,9 +138,9 @@ const COPY = {
       {
         t: "Tus derechos",
         p: [
-          "Según la Ley 1581 de 2012 de Colombia y, si estás en la Unión Europea, el RGPD, puedes acceder a tus datos, corregirlos, exportarlos y borrarlos. Edita o borra tarjetas y proyectos desde el tablero o el CLI; `park ls --status all --json` exporta todas tus tarjetas. Para borrar tu cuenta completa, escribe a " +
+          "Según la Ley 1581 de 2012 de Colombia y, si estás en la Unión Europea, el RGPD, puedes acceder a tus datos, corregirlos, exportarlos y borrarlos. Edita o borra tarjetas y proyectos desde el tablero o el CLI; `park export` guarda tu tablero completo en JSON. Para borrar tu cuenta completa, escribe a " +
             CONTACT +
-            " y lo haremos en máximo 15 días hábiles. Las copias de seguridad de la base se renuevan en el ciclo normal del proveedor, y lo que contienen sigue cifrado.",
+            " y lo haremos en máximo 15 días hábiles. Las copias de seguridad de la base vencen en el ciclo normal del proveedor.",
         ],
       },
       {

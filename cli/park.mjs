@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-const VERSION = "0.3.4";
+const VERSION = "0.3.5";
 const CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "parkboard", "config.json");
 const ENUMS = {
   status: ["idea", "pending", "doing", "done"],
@@ -55,6 +55,7 @@ const SCHEMA = {
     done: { args: ["<card>"] },
     rm: { args: ["<card>"], flags: { "--yes": "required: deletion is permanent" } },
     projects: {},
+    export: { note: "the whole board as JSON (every project and card, done ones included), e.g. park export > board.json" },
     project: {
       args: ["<project>"],
       flags: {
@@ -82,6 +83,7 @@ Usage:
   park done 12
   park rm 12 --yes
   park projects
+  park export > board.json   the whole board as JSON (every card, done ones included)
   park project ungga-mcp --area work [--name …]
   park project ungga-mcp --delete --yes   (its cards move to loose ideas)
   park config --url https://… --key pk_…
@@ -344,6 +346,9 @@ async function main() {
         ps.map((p) => `${p.slug.padEnd(28)} ${String(p._count.cards).padStart(3)} open  ${color("dim", p.area.toLowerCase())}`).join("\n"),
       );
     }
+    case "export":
+      // Always JSON: it is meant to be saved, not read.
+      return process.stdout.write(JSON.stringify(await request("GET", "/api/board"), null, 2) + "\n");
     case "project": {
       const ref = positionals.join(" ").trim();
       if (!ref) die(2, "project needs a project slug, e.g. park project ungga-mcp --area work (see `park projects`)");

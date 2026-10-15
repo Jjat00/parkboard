@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
-import { open } from "./crypto";
 import { db } from "./db";
-import { openCard, openProject, sealProject, slugWhere } from "./sealed";
+import { openCard, openProject, projectCreate, slugWhere } from "./sealed";
 
 export const CARD_W = 260;
 export const CARD_H = 150;
@@ -92,7 +91,7 @@ async function insertProject(ownerId: string, slug: string, input: z.infer<typeo
   const right = projects.reduce((m, p) => Math.max(m, p.x + p.width), -80);
   const project = await db.project.create({
     data: {
-      ...sealProject(ownerId, { ...input, slug }),
+      ...projectCreate(ownerId, { ...input, slug }),
       ownerId,
       color: input.color ?? PALETTE[projects.length % PALETTE.length],
       x: input.x ?? right + 80,
@@ -113,9 +112,9 @@ async function freeSlug(ownerId: string, base: string) {
     const candidates = Array.from({ length: 50 }, (_, i) => (from + i === 1 ? base : `${base}-${from + i}`));
     const taken = await db.project.findMany({
       where: { ownerId, OR: slugWhere(ownerId, candidates) },
-      select: { slug: true },
+      select: { slug: true, encrypted: true },
     });
-    const used = new Set(taken.map((p) => open(ownerId, "Project.slug", p.slug)));
+    const used = new Set(taken.map((p) => openProject(ownerId, p).slug));
     const free = candidates.find((c) => !used.has(c));
     if (free) return free;
   }

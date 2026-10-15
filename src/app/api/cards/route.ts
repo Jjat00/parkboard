@@ -3,7 +3,7 @@ import { requireActor } from "@/lib/auth";
 import { CardInput, placeCard, resolveProject, slugify, Status } from "@/lib/board";
 import { db } from "@/lib/db";
 import { parseBody, writeConflict } from "@/lib/http";
-import { openCard, sealCard, slugWhere } from "@/lib/sealed";
+import { CARD_PROJECT, cardCreate, openCard, slugWhere } from "@/lib/sealed";
 
 export async function GET(req: Request) {
   const actor = await requireActor(req);
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   const q = params.get("q")?.trim().toLowerCase();
   const rows = await db.card.findMany({
     where,
-    include: { project: { select: { slug: true, name: true, area: true } } },
+    include: { project: CARD_PROJECT },
     orderBy: [{ createdAt: "desc" }],
     // Title and notes are encrypted, so a text search decrypts the owner's cards and filters here.
     take: q ? undefined : limit,
@@ -50,16 +50,15 @@ export async function POST(req: Request) {
     const pos = x !== undefined && y !== undefined ? { x, y } : await placeCard(actor.userId, projectId);
     const card = await db.card.create({
       data: {
-        ...sealCard(actor.userId, data),
+        ...cardCreate(actor.userId, { ...data, origin: data.origin ?? (actor.via === "key" ? actor.name : "web") }),
         ...pos,
         // A card in a project takes the area from it.
         area: projectId ? null : (data.area ?? null),
         ownerId: actor.userId,
         projectId,
-        origin: data.origin ?? (actor.via === "key" ? actor.name : "web"),
         doneAt: data.status === "DONE" ? new Date() : null,
       },
-      include: { project: { select: { slug: true, name: true, area: true } } },
+      include: { project: CARD_PROJECT },
     });
     return Response.json({ card: openCard(card) }, { status: 201 });
   } catch (e) {

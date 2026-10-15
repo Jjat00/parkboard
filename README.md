@@ -24,7 +24,8 @@ to it is one card away.
 - **CLI `park`** with no dependencies: JSON when piped, `--dry-run` on writes, `park schema` for agents.
 - **Encrypted at rest**: titles, notes, links, tags, project names and session details are stored with
   AES-256-GCM under a key kept outside the database (`PARKBOARD_ENCRYPTION_KEYS`), each value bound to its owner
-  and field. Projects are found by a keyed hash of their slug; text search decrypts in the server.
+  and field. Projects are found by a keyed hash of their slug (`PARKBOARD_INDEX_KEY`); text search decrypts in
+  the server.
 - **Private by default**: one board per Clerk user, plus an optional email allowlist (`PARKBOARD_ALLOWED_EMAILS`).
   The CLI uses API keys stored as SHA-256 hashes.
 
@@ -39,8 +40,29 @@ pnpm exec prisma migrate deploy
 pnpm dev
 ```
 
-Losing `PARKBOARD_ENCRYPTION_KEYS` means losing the data: keep a copy outside the database. To rotate it, prepend a
-new `id:key` to the ring and run `pnpm encrypt:existing`, which also encrypts rows written before encryption existed.
+Losing `PARKBOARD_ENCRYPTION_KEYS` or `PARKBOARD_INDEX_KEY` means losing the data: keep a copy outside the
+database, and keep retired keys for as long as backups written with them exist.
+
+**Upgrading an existing board to encryption.** A version without encryption must never run next to one that
+writes sealed rows, so the upgrade goes through a bridge:
+
+1. Set both keys and `PARKBOARD_ENCRYPT_WRITES=false`, run `pnpm db:migrate` (additive) and deploy. This bridge
+   reads both formats and writes in clear, so it runs safely next to the version before it.
+2. Once the version before no longer serves any request, remove `PARKBOARD_ENCRYPT_WRITES` and deploy. The bridge
+   still running next to it seals edits of sealed rows and never writes plaintext into one.
+3. Once that deployment serves all traffic, run `pnpm encrypt:existing` until it exits 0. It stops if a project
+   was created twice, and exits 1 if anything is left.
+
+From then on, rolling back to a version without encryption shows sealed text: roll forward instead.
+
+**Rotating the encryption key**, so that no instance ever meets a key it cannot read:
+
+1. Deploy the ring `old:…,new:…` everywhere: every instance can now read `new`, still writing with `old`.
+2. Once nothing runs with the previous ring, deploy `new:…,old:…`: new values use `new`.
+3. Once nothing writes with `old` as the current key, run `pnpm encrypt:existing` until it exits 0.
+4. Drop `old` from the running ring, keeping it safe for backups made before.
+
+The index key is not rotated.
 
 ## CLI
 

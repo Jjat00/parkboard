@@ -45,3 +45,6 @@ next-env.d.ts
 .env*.local
 !.env.example
 /src/generated/
+
+# Codex reviews, never committed
+.revisiones/

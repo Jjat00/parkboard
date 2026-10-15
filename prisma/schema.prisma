@@ -42,6 +42,8 @@ model Project {
   /// Name and slug are encrypted (src/lib/crypto.ts); the slug is found by its blind index.
   slug      String
   slugIndex String?
+  /// False for rows written in clear before encryption, until `pnpm encrypt:existing` seals them.
+  encrypted Boolean  @default(false)
   name      String
   area      Area     @default(PERSONAL)
   color     String   @default("#68ddfd")
@@ -57,7 +59,7 @@ model Project {
   @@unique([ownerId, slugIndex])
 }
 
-/// Title, notes, links, tags, session, sessionId, cwd and vaultNote are stored encrypted
+/// Title, notes, links, tags, origin, session, sessionId, cwd and vaultNote are stored encrypted
 /// (src/lib/sealed.ts): links holds one sealed string, tags a single sealed element.
 model Card {
   id        String    @id @default(cuid())
@@ -86,6 +88,8 @@ model Card {
   cwd       String?
   /// Obsidian note, e.g. "Ideas/CLI de Google Flow por ingeniería inversa"
   vaultNote String?
+  /// False for rows written in clear before encryption, until `pnpm encrypt:existing` seals them.
+  encrypted Boolean   @default(false)
   projectId String?
   project   Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
   x         Float     @default(0)
