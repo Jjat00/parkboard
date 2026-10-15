@@ -132,10 +132,34 @@ function Logo() {
   );
 }
 
+/** Structured data so search engines and language models know what the page is about. */
+function jsonLd(lang: Lang) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Parkboard",
+    url: "https://parkboard.jato.run/",
+    description: COPY[lang].lead,
+    applicationCategory: "DeveloperApplication",
+    operatingSystem: "Web, macOS, Linux, Windows",
+    inLanguage: ["es", "en"],
+    isAccessibleForFree: true,
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    image: "https://parkboard.jato.run/screenshot.png",
+    codeRepository: REPO,
+    author: { "@type": "Person", name: "Jaime Aza", url: "https://jaimeaza.tech" },
+  };
+}
+
 export function Landing({ lang }: { lang: Lang }) {
   const c = COPY[lang];
   return (
     <div className="relative min-h-full overflow-x-clip bg-ink">
+      <script
+        type="application/ld+json"
+        // Static data built here, not user input.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd(lang)).replace(/</g, "\\u003c") }}
+      />
       {/* Dotted canvas backdrop, like the board */}
       <div
         aria-hidden
@@ -326,6 +350,9 @@ export function Landing({ lang }: { lang: Lang }) {
             <Link href="/privacy" className="text-muted hover:text-fg">
               {c.privacy}
             </Link>
+            <a href="/llms.txt" className="text-muted hover:text-fg" title="Parkboard for Claude, ChatGPT, Codex…">
+              llms.txt
+            </a>
             <span>
               {c.by}{" "}
               <a href="https://jaimeaza.tech" className="text-muted hover:text-fg">

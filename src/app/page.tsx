@@ -20,6 +20,7 @@ export async function generateMetadata(): Promise<Metadata> {
     // The landing is public; the board behind sign-in is not.
     robots: { index: true, follow: true },
     openGraph: { title: "Parkboard", description, images: ["/screenshot.png"] },
+    alternates: { canonical: "/", types: { "text/plain": "/llms.txt" } },
   };
 }
 
