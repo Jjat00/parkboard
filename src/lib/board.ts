@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "./db";
-import { openCard, openProject, projectCreate, slugWhere } from "./sealed";
+import { openCard, openProject, projectCreate, sealFormerProject, slugWhere } from "./sealed";
 
 export const CARD_W = 260;
 export const CARD_H = 150;
@@ -167,12 +167,23 @@ export async function deleteProject(ownerId: string, id: string, { onlyIfEmpty =
   return db.$transaction(async (tx) => {
     // Lock the project row: a card being created in it or moved into it waits on this lock
     // (its foreign key check), so no card slips in between the check, the move and the delete.
-    const locked = await tx.$queryRaw<{ area: z.infer<typeof Area> }[]>`
-      SELECT "area" FROM "Project" WHERE "id" = ${id} AND "ownerId" = ${ownerId} FOR UPDATE`;
+    const locked = await tx.$queryRaw<
+      { area: z.infer<typeof Area>; name: string; color: string; encrypted: boolean }[]
+    >`
+      SELECT "area", "name", "color", "encrypted" FROM "Project" WHERE "id" = ${id} AND "ownerId" = ${ownerId} FOR UPDATE`;
     if (!locked.length) return false;
     if (onlyIfEmpty && (await tx.card.count({ where: { ownerId, projectId: id, status: { not: "DONE" } } })))
       return false;
-    await tx.card.updateMany({ where: { ownerId, projectId: id }, data: { projectId: null, area: locked[0].area } });
+    const { area, color } = locked[0];
+    const { name } = openProject(ownerId, locked[0]);
+    // The cards remember the project's name and color, so the dashboard still counts them for it.
+    // A sealed card gets it sealed and a card still in clear gets it in clear, as its flag says.
+    const moved = { projectId: null, area, formerColor: color };
+    await tx.card.updateMany({
+      where: { ownerId, projectId: id, encrypted: true },
+      data: { ...moved, formerProject: sealFormerProject(ownerId, name) },
+    });
+    await tx.card.updateMany({ where: { ownerId, projectId: id, encrypted: false }, data: { ...moved, formerProject: name } });
     await tx.project.delete({ where: { id } });
     return true;
   });

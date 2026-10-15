@@ -59,7 +59,7 @@ model Project {
   @@unique([ownerId, slugIndex])
 }
 
-/// Title, notes, links, tags, origin, session, sessionId, cwd and vaultNote are stored encrypted
+/// Title, notes, links, tags, origin, session, sessionId, cwd, vaultNote and formerProject are stored encrypted
 /// (src/lib/sealed.ts): links holds one sealed string, tags a single sealed element.
 model Card {
   id        String    @id @default(cuid())
@@ -88,6 +88,10 @@ model Card {
   cwd       String?
   /// Obsidian note, e.g. "Ideas/CLI de Google Flow por ingeniería inversa"
   vaultNote String?
+  /// Name (encrypted) and color of the project the card was in when that project was deleted,
+  /// so a done card still counts for its project in the activity dashboard.
+  formerProject String?
+  formerColor   String?
   /// False for rows written in clear before encryption, until `pnpm encrypt:existing` seals them.
   encrypted Boolean   @default(false)
   projectId String?

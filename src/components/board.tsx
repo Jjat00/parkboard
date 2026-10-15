@@ -13,8 +13,9 @@ import {
   type Node,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
-import { ArrowDownUp, CircleCheck, ChevronsDownUp, ChevronsUpDown, FolderPlus, KeyRound, LayoutGrid, Plus, Search } from "lucide-react";
+import { ArrowDownUp, ChartColumn, CircleCheck, ChevronsDownUp, ChevronsUpDown, FolderPlus, KeyRound, LayoutGrid, Plus, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { AREA, VIEWS, viewOf, type AreaKey, type ViewKey } from "@/lib/labels";
 import { arrangeProjects, CARD_W, INBOX_ID, layoutProject, resolveOverlaps, SORT_MODES, type SortMode } from "@/lib/layout";
@@ -700,6 +701,14 @@ function Toolbar({
         <CircleCheck size={14} /> Hechas <span className="font-mono text-faint">{doneCount}</span>
       </button>
 
+      <Link
+        href="/dashboard"
+        className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
+        title="Qué has hecho: por día, semana, mes o el rango que elijas"
+      >
+        <ChartColumn size={14} /> Actividad
+      </Link>
+
       <select
         value=""
         onChange={(e) => {
@@ -791,6 +800,10 @@ function pruneLocal(d: BoardData, projectId: string): BoardData {
   if (!project || d.cards.some((c) => c.projectId === projectId && c.status !== "DONE")) return d;
   return {
     projects: d.projects.filter((p) => p.id !== projectId),
-    cards: d.cards.map((c) => (c.projectId === projectId ? { ...c, projectId: null, area: project.area } : c)),
+    cards: d.cards.map((c) =>
+      c.projectId === projectId
+        ? { ...c, projectId: null, area: project.area, formerProject: project.name, formerColor: project.color }
+        : c,
+    ),
   };
 }

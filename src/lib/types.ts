@@ -35,6 +35,9 @@ export type CardDTO = {
   cwd: string | null;
   vaultNote: string | null;
   projectId: string | null;
+  /** Name and color of the project the card was in when that project was deleted. */
+  formerProject: string | null;
+  formerColor: string | null;
   x: number;
   y: number;
   createdAt: string;

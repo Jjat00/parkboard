@@ -16,7 +16,7 @@ import type { Link } from "./types";
  * one before encryption (which never sees a sealed row) and the one after (which it can read and
  * never corrupts), so the two are never live together with the old one.
  */
-const CARD_TEXT = ["title", "notes", "session", "sessionId", "cwd", "vaultNote", "origin"] as const;
+const CARD_TEXT = ["title", "notes", "session", "sessionId", "cwd", "vaultNote", "origin", "formerProject"] as const;
 type CardText = (typeof CARD_TEXT)[number];
 
 type CardFields = { [K in CardText]?: string | null } & { links?: Link[]; tags?: string[] };
@@ -72,8 +72,8 @@ export function openCard<T extends Card & { project?: ProjectRow | null }>(row: 
 
 /** Every encrypted field of an opened card, to seal a plaintext row whole. */
 export function cardText(card: ReturnType<typeof openCard>) {
-  const { title, notes, session, sessionId, cwd, vaultNote, origin, links, tags } = card;
-  return { title, notes, session, sessionId, cwd, vaultNote, origin, links, tags };
+  const { title, notes, session, sessionId, cwd, vaultNote, origin, formerProject, links, tags } = card;
+  return { title, notes, session, sessionId, cwd, vaultNote, origin, formerProject, links, tags };
 }
 
 /** Encrypts a project's name and slug; the slug also gets the blind index used to find it. */
@@ -125,6 +125,9 @@ export function projectCreate<T extends { slug: string; name: string }>(ownerId:
 }
 
 /** Like cardUpdate, for a project. */
+/** Seals a deleted project's name for its cards, which keep it as `formerProject`. */
+export const sealFormerProject = (ownerId: string, name: string) => seal(ownerId, "Card.formerProject", name);
+
 export function projectUpdate<T extends { name?: string }>(ownerId: string, current: Project, data: T) {
   if (current.encrypted) return { data: sealProject(ownerId, data), guard: {} };
   // Only while the row is still in clear: if the next version sealed it meanwhile, plaintext
