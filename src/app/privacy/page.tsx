@@ -43,6 +43,7 @@ const COPY = {
       {
         t: "Who can see it",
         p: [
+          "Your board belongs to you. Only your account can see it: no other user can open, search or list it, and what you park is never shared with anyone.",
           "Encryption happens on the server: the app decrypts your cards to show them to you, so whoever runs the service technically holds the key. We will not open the contents of your board unless you ask us to (for example, to fix a support issue) or a competent authority requires it, and we will tell you when the law allows.",
           "We do not sell or share your data, there are no ads or third-party analytics, and your data is not used to train AI models.",
         ],
@@ -116,6 +117,7 @@ const COPY = {
       {
         t: "Quién puede verlo",
         p: [
+          "Tu tablero es tuyo. Solo tu cuenta puede verlo: ningún otro usuario puede abrirlo, buscarlo ni listarlo, y lo que parqueas no se comparte con nadie.",
           "El cifrado ocurre en el servidor: la aplicación descifra tus tarjetas para mostrártelas, así que quien opera el servicio tiene técnicamente la clave. No abriremos el contenido de tu tablero salvo que tú lo pidas (por ejemplo, para resolver un problema de soporte) o lo exija una autoridad competente, y te avisaremos cuando la ley lo permita.",
           "No vendemos ni compartimos tus datos, no hay publicidad ni analítica de terceros y tus datos no se usan para entrenar modelos de IA.",
         ],

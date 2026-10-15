@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Bot, FolderKanban, KeyRound, Layers, Lock, Star, Terminal } from "lucide-react";
+import { ArrowRight, Bot, CheckCheck, Download, FolderKanban, KeyRound, Layers, Lock, Star, Terminal, UserLock } from "lucide-react";
 import type { Lang } from "@/lib/lang";
 
 const REPO = "https://github.com/Jjat00/parkboard";
@@ -30,8 +30,16 @@ const COPY = {
       { icon: Bot, t: "Born in a session", d: "Every card remembers the agent, session and folder, so you can resume the conversation." },
       { icon: Terminal, t: "CLI for agents", d: "park has no dependencies: JSON when piped, --dry-run on writes, park schema for agents." },
       { icon: KeyRound, t: "API keys", d: "Bearer keys for the CLI, stored as SHA-256 hashes, created from the web." },
-      { icon: Lock, t: "Encrypted at rest", d: "What you write is encrypted before it reaches the database. One board per user." },
+      { icon: CheckCheck, t: "Done, out of the way", d: "Closed cards leave the canvas for a Done panel, grouped by day, one click from reopening." },
     ],
+    privTitle: "Your board is yours alone",
+    privLead: "What you park is encrypted before it reaches the database, and nobody but you sees your board.",
+    privPoints: [
+      { icon: Lock, t: "Encrypted at rest", d: "Titles, notes, links, tags, project names and session details are stored with AES-256-GCM. A copy of the database cannot be read without the key, which is kept apart." },
+      { icon: UserLock, t: "Only for you", d: "Each account has its own board, invisible to everyone else. No ads, no selling your data, no training AI models with it." },
+      { icon: Download, t: "Take it with you", d: "park export saves your whole board as JSON, and you can delete everything whenever you want." },
+    ],
+    privLink: "Read the privacy policy",
     cliTitle: "From the terminal",
     cliOut: "parked #13 Check the coupon with free shipping (shop)",
     soonTitle: "Rather host it yourself?",
@@ -68,8 +76,16 @@ const COPY = {
       { icon: Bot, t: "Nace en una sesión", d: "Cada tarjeta recuerda el agente, la sesión y la carpeta, para retomar la conversación." },
       { icon: Terminal, t: "CLI para agentes", d: "park no tiene dependencias: JSON al encadenar, --dry-run al escribir, park schema para agentes." },
       { icon: KeyRound, t: "Claves de API", d: "Claves Bearer para el CLI, guardadas como hash SHA-256 y creadas desde la web." },
-      { icon: Lock, t: "Cifrado en reposo", d: "Lo que escribes se cifra antes de llegar a la base de datos. Un tablero por usuario." },
+      { icon: CheckCheck, t: "Hechas, fuera del camino", d: "Las tarjetas cerradas salen del lienzo a un panel de Hechas, agrupadas por día y a un clic de reabrirlas." },
     ],
+    privTitle: "Tu tablero es solo tuyo",
+    privLead: "Lo que parqueas se cifra antes de llegar a la base de datos, y nadie más que tú ve tu tablero.",
+    privPoints: [
+      { icon: Lock, t: "Cifrado en reposo", d: "Títulos, notas, enlaces, etiquetas, nombres de proyecto y datos de la sesión se guardan con AES-256-GCM. Una copia de la base no se puede leer sin la clave, que se guarda aparte." },
+      { icon: UserLock, t: "Solo para ti", d: "Cada cuenta tiene su propio tablero, invisible para los demás. Sin publicidad, sin vender tus datos y sin entrenar modelos de IA con ellos." },
+      { icon: Download, t: "Llévatelo cuando quieras", d: "park export guarda tu tablero completo en JSON, y puedes borrarlo todo cuando quieras." },
+    ],
+    privLink: "Lee la política de privacidad",
     cliTitle: "Desde la terminal",
     cliOut: "parqueada #13 Revisar el cupón con envío gratis (tienda)",
     soonTitle: "¿Prefieres tu propio servidor?",
@@ -241,6 +257,28 @@ export function Landing({ lang }: { lang: Lang }) {
               </div>
             ))}
           </div>
+        </section>
+
+        <section id="privacy" className="mb-24 scroll-mt-8">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{c.privTitle}</h2>
+            <p className="mt-4 leading-relaxed text-muted">{c.privLead}</p>
+          </div>
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            {c.privPoints.map(({ icon: Icon, t, d }) => (
+              <div key={t} className="rounded-2xl border border-cyan/25 bg-panel/70 p-6">
+                <Icon size={18} className="text-cyan" />
+                <h3 className="mt-4 font-semibold tracking-tight">{t}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted">{d}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-6 text-center text-sm">
+            <Link href="/privacy" className="inline-flex items-center gap-1.5 text-muted hover:text-fg">
+              {c.privLink}
+              <ArrowRight size={14} />
+            </Link>
+          </p>
         </section>
 
         <section
