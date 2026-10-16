@@ -3,23 +3,30 @@ import type { CardDTO } from "./types";
 /**
  * Where a card stands with Parkboard Autopilot (autopilot/), read from its tags: `auto` queues
  * it, `auto-en-curso-…` is a run holding it, `auto-pr` and `auto-main` are its results and
- * `auto-bloqueada` means it was handed back. Cards that never touched Autopilot have none.
+ * `auto-bloqueada` means it was handed back. Each run follows the open PRs on GitHub and turns
+ * `auto-pr` into `auto-pr-fusionado` or `auto-pr-cerrado`. Cards that never touched Autopilot have none.
  */
-export type AutopilotState = "queued" | "working" | "pr" | "main" | "blocked";
+export type AutopilotState = "queued" | "working" | "pr" | "prMerged" | "prClosed" | "main" | "blocked" | "done";
 
 export const AUTOPILOT_STATE: Record<AutopilotState, { label: string; color: string; hint: string }> = {
   queued: { label: "En cola", color: "#8b8ba3", hint: "con auto, esperando la próxima pasada" },
   working: { label: "Trabajando", color: "#f5d90a", hint: "una ejecución la tiene ahora" },
   pr: { label: "PR por revisar", color: "#9e8cfc", hint: "PR abierto que revisas tú" },
+  prMerged: { label: "PR fusionado", color: "#4ade80", hint: "fusionaste su PR" },
+  prClosed: { label: "PR cerrado", color: "#a1a1aa", hint: "su PR se cerró sin fusionar" },
   main: { label: "En main", color: "#4ade80", hint: "cambio trivial fusionado solo" },
   blocked: { label: "Devuelta", color: "#fb7185", hint: "no la pudo hacer; el motivo está en sus notas" },
+  done: { label: "Cerrada", color: "#a1a1aa", hint: "la cerraste antes de que se viera qué pasó con su PR" },
 };
 
 export function autopilotState(card: CardDTO): AutopilotState | null {
   const t = card.tags;
   if (t.some((x) => x.startsWith("auto-en-curso"))) return "working";
   if (t.includes("auto-main")) return "main";
-  if (t.includes("auto-pr")) return "pr";
+  if (t.includes("auto-pr-fusionado")) return "prMerged";
+  if (t.includes("auto-pr-cerrado")) return "prClosed";
+  // A closed card is no longer waiting for review, whatever its PR did.
+  if (t.includes("auto-pr")) return card.status === "DONE" ? "done" : "pr";
   if (t.includes("auto-bloqueada")) return "blocked";
   if (t.includes("auto") && card.status !== "DONE") return "queued";
   return null;

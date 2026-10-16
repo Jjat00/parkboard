@@ -5,6 +5,7 @@ import {
   appendNote,
   authorized,
   branchFor,
+  cardPr,
   checkPatch,
   directReason,
   eligible,
@@ -20,6 +21,7 @@ import {
   scoutCandidates,
   leaseTag,
   parseNumstat,
+  prSyncPatch,
   run,
   settlePatch,
   validateRepos,
@@ -342,4 +344,29 @@ test("a scout justification in two paragraphs stays Autopilot's", () => {
   assert.equal(gate(card({ title: "Corregir typo", notes }), repos), null);
   const later = `${notes}\n\nOjo: no tocar producción.`;
   assert.match(gate(card({ title: "Corregir typo", notes: later }), repos), /producci/);
+});
+
+test("a PR merged or closed on GitHub settles its card", () => {
+  const url = "https://github.com/o/r/pull/5";
+  const c = (over = {}) => ({ tags: ["auto-pr", "x"], status: "DOING", notes: "", links: [{ url, label: "PR de Autopilot" }], ...over });
+  const date = "2026-10-16";
+  assert.deepEqual(cardPr(c()), { url, repo: "o/r", number: 5 });
+  assert.equal(cardPr(c({ links: [{ url: "https://evil.com/o/r/pull/5", label: "PR de Autopilot" }] })), null);
+  assert.equal(cardPr(c({ links: [{ url, label: "otro" }] })), null);
+
+  assert.equal(prSyncPatch(c(), { state: "open", merged_at: null }, url, date), null);
+  let p = prSyncPatch(c(), { state: "closed", merged_at: "2026-10-16T21:00:00Z" }, url, date);
+  assert.deepEqual(p.tags, ["x", "auto-pr-fusionado"]);
+  assert.equal(p.status, "DONE");
+  p = prSyncPatch(c(), { state: "closed", merged_at: null }, url, date);
+  assert.deepEqual(p.tags, ["x", "auto-pr-cerrado"]);
+  assert.equal(p.status, "PENDING");
+  assert.match(p.notes, /se cerró sin fusionar/);
+  // A card Jaime already closed stays closed.
+  p = prSyncPatch(c({ status: "DONE" }), { state: "closed", merged_at: null }, url, date);
+  assert.equal(p.status, undefined);
+  p = prSyncPatch(c({ status: "DONE" }), { state: "closed", merged_at: "x" }, url, date);
+  assert.equal(p.status, undefined);
+  // Already settled: nothing to write.
+  assert.equal(prSyncPatch(c({ tags: ["auto-pr-cerrado"] }), { state: "closed", merged_at: null }, url, date), null);
 });

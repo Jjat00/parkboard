@@ -16,6 +16,8 @@
 //      binaries, size), commits it, runs the verifiers on a fresh copy of that commit, asks a judge
 //      to compare the whole diff with the card, and pushes that same commit as a draft PR.
 //   6. Writes the outcome on the card: tag `auto-pr` and the link, or `auto-bloqueada` and why.
+//   Every run also follows the PRs it opened: once GitHub says one was merged or closed, `auto-pr`
+//   becomes `auto-pr-fusionado` or `auto-pr-cerrado`, so the board stops showing it as pending review.
 //
 // Usage: node autopilot.mjs [--dry-run] [--card 12] [--allow-host]
 //   --dry-run     gate and triage only; prints the decisions and changes nothing
@@ -39,7 +41,7 @@ const int = (v, d) => (v && /^\d+$/.test(v) ? Number(v) : d);
  * auto-en-curso-<lease start base36><4 hex>-<repo hash>: who holds it, since when, and in which
  * repository it works. One tag only, because a card carries at most 20.
  */
-export const TAG = { optIn: "auto", pr: "auto-pr", main: "auto-main", blocked: "auto-bloqueada", lease: "auto-en-curso", reviewed: "auto-revisada" };
+export const TAG = { optIn: "auto", pr: "auto-pr", prMerged: "auto-pr-fusionado", prClosed: "auto-pr-cerrado", main: "auto-main", blocked: "auto-bloqueada", lease: "auto-en-curso", reviewed: "auto-revisada" };
 const MAX_TAGS = 20;
 const CFG = {
   maxTasks: int(env.AUTOPILOT_MAX_TASKS, 1),
@@ -404,6 +406,40 @@ export function settlePatch(c, card, runTag, { outcome, note, link, date }) {
   const published = { pr: TAG.pr, merged: TAG.main }[outcome];
   const tags = withTags(c.tags, published ? [published] : [], mine);
   return { ...patch, tags, ...(c.status === "DOING" && !published ? { status: "PENDING" } : {}) };
+}
+
+export const PR_LABEL = "PR de Autopilot";
+
+/** The newest PR Autopilot linked on the card, as GitHub names it, or null. */
+export function cardPr(card) {
+  const url = [...card.links].reverse().find((l) => l.label === PR_LABEL)?.url;
+  const m = url && /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/(\d+)$/.exec(url);
+  return m ? { url, repo: m[1], number: Number(m[2]) } : null;
+}
+
+/**
+ * The write that records what happened to a card's PR on GitHub, or null while it is still open.
+ * Merged closes the card; closed without merging sends a card still in progress back to pending
+ * (without `auto`, so it is not retried alone). A status Jaime set otherwise stays.
+ */
+export function prSyncPatch(c, pr, url, date) {
+  if (!c.tags.includes(TAG.pr)) return null;
+  if (pr.merged_at) {
+    return {
+      tags: withTags(c.tags, [TAG.prMerged], [TAG.pr]),
+      notes: appendNote(c.notes, `fusionaste el PR: ${url}.`, date),
+      ...(c.status !== "DONE" ? { status: "DONE" } : {}),
+    };
+  }
+  if (pr.state === "closed") {
+    const back = c.status === "DOING";
+    return {
+      tags: withTags(c.tags, [TAG.prClosed], [TAG.pr]),
+      notes: appendNote(c.notes, `el PR se cerró sin fusionar: ${url}.${back ? " La devuelvo a pendientes." : ""}`, date),
+      ...(back ? { status: "PENDING" } : {}),
+    };
+  }
+  return null;
 }
 
 /** Short hash of a repository name; GitHub names are case-insensitive. */
@@ -1020,7 +1056,7 @@ async function work(card, verdict, repo, runTag, scratch) {
 // ---------------------------------------------------------------------------------------------
 // Main
 
-const PR_LINK = (url) => ({ url, label: "PR de Autopilot" });
+const PR_LINK = (url) => ({ url, label: PR_LABEL });
 
 /**
  * Looks for cards Jaime did not tag that Autopilot could do alone, and tags them `auto` (with a
@@ -1096,6 +1132,29 @@ async function recover(repos) {
   }
 }
 
+/**
+ * Follows every PR still waiting for review (tag `auto-pr`, open or closed card) and records on
+ * the card when GitHub says it was merged or closed. Only reads GitHub; a failed query leaves the
+ * card for the next run.
+ */
+async function syncPrs() {
+  const { cards } = await board("GET", `/api/cards?tag=${TAG.pr}`);
+  for (const card of cards) {
+    const linked = cardPr(card);
+    if (!linked) continue;
+    try {
+      const pr = await github("GET", `/repos/${linked.repo}/pulls/${linked.number}`);
+      const patched = await persist(`#${card.number}`, () =>
+        // Only while the card still points at the same PR.
+        updateCard(card.id, (c) => (cardPr(c)?.url === linked.url ? prSyncPatch(c, pr, linked.url) : null)),
+      );
+      if (patched) log(`#${card.number} su PR ${pr.merged_at ? "se fusionó" : "se cerró"}: ${linked.url}`);
+    } catch (e) {
+      log(`#${card.number} no pude consultar su PR: ${e.message}`);
+    }
+  }
+}
+
 async function main(flags) {
   if (!flags["dry-run"] && !CFG.agentUser && !flags["allow-host"]) {
     throw new Error("sin AUTOPILOT_AGENT_USER el agente correría con tu usuario; usa el contenedor o pasa --allow-host");
@@ -1107,7 +1166,10 @@ async function main(flags) {
   const scratch = join(CFG.workdir, "ask"); // empty, ours: where triage and judge run
   mkdirSync(scratch, { recursive: true, mode: 0o700 });
 
-  if (!flags["dry-run"]) await recover(repos);
+  if (!flags["dry-run"]) {
+    await recover(repos);
+    await syncPrs().catch((e) => log(`no pude seguir los PRs: ${e.message}`));
+  }
   try {
     if (!flags.card) await scout(repos, scratch, flags["dry-run"]);
   } catch (e) {
