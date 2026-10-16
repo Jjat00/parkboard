@@ -21,20 +21,29 @@ export async function GET(req: Request) {
   if (project) where.project = { OR: [{ id: project }, ...slugWhere(actor.userId, [slugify(project)])] };
   const limit = Math.min(Number(params.get("limit") ?? 100) || 100, 500);
   const q = params.get("q")?.trim().toLowerCase();
+  /**
+   * Cards with exactly this tag, or with a tag starting with this prefix. Like q they look at every
+   * card, and unlike q they return every match: an agent's queue must not hide old cards.
+   */
+  const tag = params.get("tag")?.trim();
+  const tagPrefix = params.get("tagPrefix")?.trim();
+  const byTag = Boolean(tag || tagPrefix);
   const rows = await db.card.findMany({
     where,
     include: { project: CARD_PROJECT },
     orderBy: [{ createdAt: "desc" }],
     // Title and notes are encrypted, so a text search decrypts the owner's cards and filters here.
-    take: q ? undefined : limit,
+    take: q || byTag ? undefined : limit,
   });
   let cards = rows.map(openCard);
+  if (tag) cards = cards.filter((c) => c.tags.includes(tag));
+  if (tagPrefix) cards = cards.filter((c) => c.tags.some((t) => t.startsWith(tagPrefix)));
   if (q) {
     const n = /^#?(\d{1,9})$/.exec(q);
     cards = cards
-      .filter((c) => (n && c.number === Number(n[1])) || `${c.title}\n${c.notes}`.toLowerCase().includes(q))
-      .slice(0, limit);
+      .filter((c) => (n && c.number === Number(n[1])) || `${c.title}\n${c.notes}`.toLowerCase().includes(q));
   }
+  if (q && !byTag) cards = cards.slice(0, limit);
   return Response.json({ cards });
 }
 

@@ -51,6 +51,8 @@ export const CardInput = z.object({
   y: z.number().optional(),
 });
 export const CardPatch = CardInput.partial();
+/** An edit. `ifUpdatedAt` makes it conditional: it answers 409 if the card changed after that time. */
+export const CardUpdate = CardPatch.extend({ ifUpdatedAt: z.iso.datetime().optional() });
 
 export const ProjectInput = z.object({
   name: z.string().trim().min(1).max(80),

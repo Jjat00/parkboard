@@ -1,5 +1,5 @@
 import { requireActor } from "@/lib/auth";
-import { cardRef, CardPatch, placeCard, pruneProject, resolveProject } from "@/lib/board";
+import { cardRef, CardUpdate, placeCard, pruneProject, resolveProject } from "@/lib/board";
 import { db } from "@/lib/db";
 import { notFound, parseBody, writeConflict } from "@/lib/http";
 import { CARD_PROJECT, cardUpdate, openCard } from "@/lib/sealed";
@@ -18,9 +18,9 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/cards/[id]">) 
   const { id } = await ctx.params;
   const current = await db.card.findFirst({ where: cardRef(actor.userId, id) });
   if (!current) return notFound();
-  const body = await parseBody(req, CardPatch);
+  const body = await parseBody(req, CardUpdate);
   if (body.error) return body.error;
-  const { project, ...data } = body.data;
+  const { project, ifUpdatedAt, ...data } = body.data;
 
   const doneAt =
     data.status === undefined ? undefined : data.status === "DONE" ? (current.doneAt ?? new Date()) : null;
@@ -45,7 +45,14 @@ export async function PATCH(req: Request, ctx: RouteContext<"/api/cards/[id]">) 
     const include = { project: CARD_PROJECT };
     const write = cardUpdate(actor.userId, current, data);
     const card = await db.card.update({
-      where: { id: current.id, ownerId: actor.userId, ...where, ...write.guard },
+      where: {
+        id: current.id,
+        ownerId: actor.userId,
+        ...where,
+        ...write.guard,
+        // Compare-and-set for agents: the write only applies to the version they read.
+        ...(ifUpdatedAt ? { updatedAt: new Date(ifUpdatedAt) } : {}),
+      },
       data: { ...write.data, ...move, doneAt },
       include,
     });
