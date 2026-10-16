@@ -171,9 +171,12 @@ function cardBody(v) {
   return Object.fromEntries(Object.entries(body).filter(([, x]) => x !== undefined));
 }
 
-/** "owner/name" from a GitHub remote (SSH, HTTPS or owner/name itself); null for anything else. */
+/**
+ * "owner/name" from a GitHub remote (SSH, HTTPS or owner/name itself); null for anything else.
+ * SSH host aliases like git@github.com-work: (one per account in ~/.ssh/config) count as GitHub.
+ */
 export function githubRepo(value) {
-  const m = /^(?:(?:git\+)?ssh:\/\/git@github\.com\/|git@github\.com:|https?:\/\/(?:[^@/]+@)?(?:www\.)?github\.com\/)?([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?\/?$/.exec(
+  const m = /^(?:(?:git\+)?ssh:\/\/git@github\.com\/|git@github\.com(?:-[A-Za-z0-9_.-]+)?:|https?:\/\/(?:[^@/]+@)?(?:www\.)?github\.com\/)?([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?\/?$/.exec(
     String(value).trim(),
   );
   return m && !/^\.{1,2}$/.test(m[2]) ? `${m[1]}/${m[2]}` : null;
@@ -188,7 +191,7 @@ function detectRepo(dir) {
       timeout: 3000,
     });
     // Only a remote that names GitHub: a bare "a/b" remote is a relative path on disk.
-    return /^(?:(?:git\+)?ssh:\/\/git@github\.com\/|git@github\.com:|https?:\/\/(?:[^@/]+@)?(?:www\.)?github\.com\/)/.test(url.trim())
+    return /^(?:(?:git\+)?ssh:\/\/git@github\.com\/|git@github\.com(?:-[A-Za-z0-9_.-]+)?:|https?:\/\/(?:[^@/]+@)?(?:www\.)?github\.com\/)/.test(url.trim())
       ? (githubRepo(url) ?? undefined)
       : undefined;
   } catch {

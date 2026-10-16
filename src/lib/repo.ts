@@ -4,7 +4,7 @@
  */
 export function githubRepo(value: string): string | null {
   const m =
-    /^(?:(?:git\+)?ssh:\/\/git@github\.com\/|git@github\.com:|https?:\/\/(?:[^@/]+@)?(?:www\.)?github\.com\/)?([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?\/?$/.exec(
+    /^(?:(?:git\+)?ssh:\/\/git@github\.com\/|git@github\.com(?:-[A-Za-z0-9_.-]+)?:|https?:\/\/(?:[^@/]+@)?(?:www\.)?github\.com\/)?([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?\/?$/.exec(
       value.trim(),
     );
   return m && !/^\.{1,2}$/.test(m[2]) ? `${m[1]}/${m[2]}` : null;
