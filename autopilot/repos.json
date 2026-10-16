@@ -2,17 +2,30 @@
   "Jjat00/autopilot-sandbox": {
     "setup": "npm ci --ignore-scripts",
     "verify": "npm test",
-    "allow": ["npm test"]
+    "allow": [
+      "npm test"
+    ],
+    "autoMerge": true
   },
   "Jjat00/parkboard": {
     "setup": "pnpm install --frozen-lockfile",
     "verify": "pnpm typecheck && pnpm lint",
-    "allow": ["pnpm typecheck", "pnpm lint"],
-    "env": { "DATABASE_URL": "postgresql://autopilot@localhost:5432/none" }
+    "allow": [
+      "pnpm typecheck",
+      "pnpm lint"
+    ],
+    "env": {
+      "DATABASE_URL": "postgresql://autopilot@localhost:5432/none"
+    },
+    "autoMerge": true
   },
   "Jjat00/hf-studio": {
     "setup": "uv sync --frozen",
     "verify": "uv run ruff check . && uv run pytest -q",
-    "allow": ["uv run ruff check", "uv run pytest"]
+    "allow": [
+      "uv run ruff check",
+      "uv run pytest"
+    ],
+    "autoMerge": true
   }
 }

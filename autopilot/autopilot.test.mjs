@@ -6,12 +6,18 @@ import {
   authorized,
   branchFor,
   checkPatch,
+  directReason,
   eligible,
   forbidden,
   gate,
+  humanNotes,
+  mergeBlocker,
+  mergePr,
   originRepo,
   parseLease,
+  parseNameStatus,
   repoHash,
+  scoutCandidates,
   leaseTag,
   parseNumstat,
   run,
@@ -204,4 +210,136 @@ test("a card needs room for the lease tag", () => {
   const tags = (n) => ["auto", ...Array.from({ length: n - 1 }, (_, i) => `t${i}`)];
   assert.equal(gate(card({ tags: tags(19) }), repos), null);
   assert.match(gate(card({ tags: tags(20) }), repos), /etiquetas/);
+});
+
+test("straight to main only for small edits of existing, non-config files", () => {
+  const limits = { direct: true, directMaxFiles: 3, directMaxLines: 20 };
+  const repo = { verify: "x", autoMerge: true };
+  const M = (path) => ({ status: "M", path });
+  assert.equal(directReason([{ path: "README.md", lines: 2 }], [M("README.md")], repo, limits), null);
+  assert.equal(directReason([{ path: "src/app/page.tsx", lines: 1 }], [M("src/app/page.tsx")], repo, limits), null);
+  assert.match(directReason([{ path: "a.md", lines: 2 }], [M("a.md")], { verify: "x" }, limits), /no permite/);
+  assert.match(directReason([{ path: "a.md", lines: 2 }], [M("a.md")], repo, { ...limits, direct: false }), /apagado/);
+  assert.match(directReason([{ path: "n.md", lines: 2 }], [{ status: "A", path: "n.md" }], repo, limits), /crea/);
+  assert.match(directReason([{ path: "a.md", lines: 21 }], [M("a.md")], repo, limits), /líneas/);
+  const four = ["a", "b", "c", "d"].map((p) => ({ path: p, lines: 1 }));
+  assert.match(directReason(four, four.map((f) => M(f.path)), repo, limits), /archivos/);
+  for (const f of ["package.json", "next.config.ts", "tsconfig.json", "pyproject.toml", "x/ci.yml", "run.sh"])
+    assert.match(directReason([{ path: f, lines: 1 }], [M(f)], repo, limits), /configura/, f);
+  for (const f of [".npmrc", "web/.pnpmfile.cjs", ".gitattributes", ".gitignore", ".nvmrc", "setup.cfg", ".eslintrc.json"])
+    assert.match(directReason([{ path: f, lines: 1 }], [M(f)], repo, limits), /configura/, f);
+  for (const f of ["autopilot/repos.json", "autopilot/autopilot.mjs", "autopilot/README.md"])
+    assert.match(directReason([{ path: f, lines: 1 }], [M(f)], repo, limits), /Autopilot/, f);
+  assert.deepEqual(parseNameStatus("M\0src/a.ts\0A\0b.md\0"), [
+    { status: "M", path: "src/a.ts" },
+    { status: "A", path: "b.md" },
+  ]);
+  assert.throws(() => validateRepos({ "o/r": { verify: "x", autoMerge: "yes" } }), /autoMerge/);
+});
+
+test("a merged change closes the card", () => {
+  const p = settlePatch(doing(), card(), RUN, { outcome: "merged", note: "m", link: { url: "https://x/pr/2" }, date: "2026-10-16" });
+  assert.deepEqual([p.status, p.tags], ["DONE", ["auto-main"]]);
+  const q = settlePatch(doing({ status: "DONE" }), card(), RUN, { outcome: "merged", note: "m", date: "2026-10-16" });
+  assert.equal(q.status, undefined);
+  assert.equal(eligible(card({ tags: ["auto", "auto-main"] })), false);
+});
+
+test("the scout only looks at untouched cards that pass the gate", () => {
+  const c = (n, over) => card({ number: n, createdAt: `2026-10-${10 + n}`, tags: [], ...over });
+  const list = [
+    c(1),
+    c(2, { tags: ["auto"] }),
+    c(3, { tags: ["auto-revisada"] }),
+    c(4, { tags: ["auto-bloqueada"] }),
+    c(5, { kind: "IDEA" }),
+    c(6, { title: "Arreglar el deploy" }),
+    c(7, { tags: Array.from({ length: 19 }, (_, i) => `t${i}`) }),
+    c(8, { status: "DOING" }),
+    c(9, { tags: ["ux"] }),
+  ];
+  assert.deepEqual(scoutCandidates(list, repos).map((x) => x.number), [9, 1]);
+});
+
+test("a trivial PR merges only onto the exact base it was verified on", () => {
+  const v = { head: "H", baseBranch: "main", baseSha: "B", paths: new Set(["README.md"]) };
+  const pr = { state: "open", base: { ref: "main", sha: "B" }, head: { sha: "H" } };
+  const cmp = { base_commit: { sha: "B" }, merge_base_commit: { sha: "B" }, ahead_by: 1, behind_by: 0, files: [{ filename: "README.md" }] };
+  assert.equal(mergeBlocker(pr, cmp, v), null);
+  // main moved to C: same merge base, one behind (the case Codex reproduced).
+  assert.match(mergeBlocker({ ...pr, base: { ref: "main", sha: "C" } }, { ...cmp, base_commit: { sha: "C" }, behind_by: 1 }, v), /avanzó/);
+  assert.match(mergeBlocker(pr, { ...cmp, base_commit: { sha: "C" }, behind_by: 1 }, v), /avanzó/);
+  assert.match(mergeBlocker({ ...pr, base: { ref: "dev", sha: "B" } }, cmp, v), /base o de commit/);
+  assert.match(mergeBlocker({ ...pr, head: { sha: "X" } }, cmp, v), /base o de commit/);
+  assert.match(mergeBlocker({ ...pr, state: "closed" }, cmp, v), /base o de commit/);
+  assert.match(mergeBlocker(pr, { ...cmp, files: [{ filename: "README.md" }, { filename: "package.json" }] }, v), /solo el cambio/);
+  assert.match(mergeBlocker(pr, { ...cmp, ahead_by: 2 }, v), /solo el cambio/);
+});
+
+test("Autopilot's own notes never trip the gate", () => {
+  const scouted = card({
+    title: "Corregir typo del encabezado",
+    notes: "Cambiar helo por hello.\n\n**Autopilot (2026-10-16):** la marqué para hacerla sola (10/10): es un typo; no requiere credenciales ni tocar producción.",
+  });
+  assert.equal(gate(scouted, repos), null);
+  assert.equal(humanNotes(scouted.notes), "Cambiar helo por hello.");
+  // What Jaime writes after an entry still counts.
+  const after = card({ notes: "**Autopilot (2026-10-16):** no la tomé.\n\nOjo: tocar producción." });
+  assert.match(gate(after, repos), /producci/);
+  // A truncated code block (cut at 4000 characters) cannot swallow Jaime's warning after it.
+  const long = appendNote("Cambiar helo por hello.", "no terminé. los verificadores fallan (npm test):\n\n```\n" + "x".repeat(5000) + "\n```", "2026-10-16");
+  const warned = `${long}\n\nNo tocar producción; esperar a Jaime.`;
+  assert.equal(humanNotes(warned), "Cambiar helo por hello.\n\nNo tocar producción; esperar a Jaime.");
+  assert.match(gate(card({ notes: warned }), repos), /producci/);
+});
+
+test("mergePr reaches the merge only for the verified change, and reconciles a lost answer", async () => {
+  const v = { head: "H", baseBranch: "main", baseSha: "B", paths: new Set(["README.md"]) };
+  const pr = { number: 7, html_url: "https://github.com/o/r/pull/7", head: { ref: "autopilot/1-x" } };
+  const open = { state: "open", base: { ref: "main", sha: "B" }, head: { sha: "H" } };
+  const cmp = { base_commit: { sha: "B" }, merge_base_commit: { sha: "B" }, ahead_by: 1, behind_by: 0, files: [{ filename: "README.md" }] };
+  const theCard = card({ id: "c1" });
+  const io = ({ prNow = open, cmpNow = cmp, cardNow = doing(), put = () => ({}), after = () => ({ merged_at: null }) } = {}) => {
+    const calls = [];
+    return {
+      calls,
+      github: async (method, path) => {
+        calls.push(`${method} ${path}`);
+        if (method === "PUT") return put();
+        if (path.includes("/compare/")) return cmpNow;
+        if (method === "GET" && path.endsWith("/pulls/7")) return calls.filter((c) => c === "GET /repos/o/r/pulls/7").length > 1 ? after() : prNow;
+        return {};
+      },
+      board: async () => ({ card: cardNow }),
+    };
+  };
+  let t = io();
+  let res = await mergePr(theCard, RUN, pr, v, 0, t);
+  assert.equal(res.outcome, "merged");
+  assert.ok(t.calls.includes("GET /repos/o/r/compare/main...H"));
+  assert.ok(t.calls.includes("PUT /repos/o/r/pulls/7/merge"));
+  // main moved: no merge.
+  t = io({ prNow: { ...open, base: { ref: "main", sha: "C" } } });
+  res = await mergePr(theCard, RUN, pr, v, 0, t);
+  assert.equal(res.outcome, "pr");
+  assert.ok(!t.calls.some((c) => c.startsWith("PUT")));
+  // Card withdrawn just before: no merge.
+  t = io({ cardNow: doing({ status: "DONE" }) });
+  res = await mergePr(theCard, RUN, pr, v, 0, t);
+  assert.equal(res.outcome, "cancelled");
+  assert.ok(!t.calls.some((c) => c.startsWith("PUT")));
+  // The PUT failed but GitHub says it merged.
+  t = io({ put: () => { throw new Error("timeout"); }, after: () => ({ merged_at: "2026-10-16T00:00:00Z" }) });
+  assert.equal((await mergePr(theCard, RUN, pr, v, 0, t)).outcome, "merged");
+  // The PUT failed and GitHub cannot say: keep the lease.
+  t = io({ put: () => { throw new Error("timeout"); }, after: () => { throw new Error("down"); } });
+  assert.equal((await mergePr(theCard, RUN, pr, v, 0, t)).outcome, "pending");
+});
+
+test("a scout justification in two paragraphs stays Autopilot's", () => {
+  const notes = appendNote("Cambiar helo por hello.", "la marqué (10/10): Es un typo acotado y reversible.\n\nNo requiere credenciales ni tocar producción.", "2026-10-16");
+  assert.equal(humanNotes(notes), "Cambiar helo por hello.");
+  assert.equal(gate(card({ title: "Corregir typo", notes }), repos), null);
+  const later = `${notes}\n\nOjo: no tocar producción.`;
+  assert.match(gate(card({ title: "Corregir typo", notes: later }), repos), /producci/);
 });

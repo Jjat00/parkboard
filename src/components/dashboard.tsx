@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, Check, ChevronLeft, ChevronRight, CircleCheck, Plus } from "lucide-react";
+import { ArrowLeft, Bot, CalendarDays, Check, ChevronLeft, ChevronRight, CircleCheck, ExternalLink, Plus } from "lucide-react";
 import { AREA, PRIORITY, type AreaKey, type ViewKey } from "@/lib/labels";
 import {
   addDays,
@@ -48,6 +48,7 @@ import {
   type Range,
   type Row,
 } from "@/lib/stats";
+import { AUTOPILOT_STATE, autopilotRows, type AutopilotRow, type AutopilotState } from "@/lib/autopilot";
 import { ago } from "@/lib/time";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
 
@@ -896,7 +897,75 @@ function Log({ evts, projects }: { evts: Event[]; projects: Map<string, ProjectD
 
 /* ───────────────────────── the page ───────────────────────── */
 
+/** What Parkboard Autopilot is doing: how many cards in each state and each one with its PR and last note. */
+function AutopilotPanel({ rows }: { rows: AutopilotRow[] }) {
+  const [only, setOnly] = useState<AutopilotState | null>(null);
+  const count = (s: AutopilotState) => rows.filter((r) => r.state === s).length;
+  const shown = only ? rows.filter((r) => r.state === only) : rows;
+  return (
+    <Card
+      title="Autopilot"
+      sub="Tarjetas que Claude toma solo: las que tienen la etiqueta auto y lo que hizo con ellas. Estado actual, no depende del periodo."
+      right={<Bot size={16} className="text-faint" />}
+    >
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
+        {(Object.keys(AUTOPILOT_STATE) as AutopilotState[]).map((s) => {
+          const meta = AUTOPILOT_STATE[s];
+          const active = only === s;
+          return (
+            <button
+              key={s}
+              onClick={() => setOnly(active ? null : s)}
+              title={meta.hint}
+              className={`rounded-lg border px-3 py-2 text-left transition-colors ${active ? "border-fg/40 bg-fg/5" : "border-line hover:border-fg/20"}`}
+            >
+              <span className="flex items-center gap-1.5 text-[11px] text-muted">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: meta.color }} />
+                {meta.label}
+              </span>
+              <span className="mt-0.5 block text-lg font-semibold tabular-nums text-fg">{count(s)}</span>
+            </button>
+          );
+        })}
+      </div>
+      {shown.length ? (
+        <ul className="divide-y divide-line">
+          {shown.map(({ card, state, pr, note }) => {
+            const meta = AUTOPILOT_STATE[state];
+            return (
+              <li key={card.id} className="py-2.5 text-xs">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="rounded-full px-2 py-0.5 text-[10.5px] font-medium" style={{ background: `${meta.color}22`, color: meta.color }}>
+                    {meta.label}
+                  </span>
+                  <span className="font-mono text-faint">#{card.number}</span>
+                  <span className="min-w-0 flex-1 truncate text-fg" title={card.title}>
+                    {card.title}
+                  </span>
+                  {card.repo && <span className="font-mono text-[10.5px] text-faint">{card.repo}</span>}
+                  {pr && (
+                    <a href={pr} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-cyan hover:underline">
+                      PR <ExternalLink size={11} />
+                    </a>
+                  )}
+                  <span className="text-[10.5px] text-faint">{ago(card.updatedAt)}</span>
+                </div>
+                {note && state !== "queued" && <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted">{note.text}</p>}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="text-xs text-faint">
+          {rows.length ? "Ninguna tarjeta en este estado." : "Ninguna tarjeta tiene la etiqueta auto todavía. Ponla en una task o bug con repo para que Autopilot la tome."}
+        </p>
+      )}
+    </Card>
+  );
+}
+
 export function Dashboard({ cards, projects }: { cards: CardDTO[]; projects: ProjectDTO[] }) {
+  const autopilot = useMemo(() => autopilotRows(cards), [cards]);
   // Dates are cut in the viewer's time zone, which the server does not know: render after mount.
   const [now, setNow] = useState<Date | null>(null);
   const [state, setState] = useState<State>(DEFAULT);
@@ -1070,6 +1139,8 @@ export function Dashboard({ cards, projects }: { cards: CardDTO[]; projects: Pro
               hint={`récord ${view.longest} · activo ${view.activeDays}/${view.span} días`}
             />
           </div>
+
+          <AutopilotPanel rows={autopilot} />
 
           <Card
             title="Actividad en el tiempo"

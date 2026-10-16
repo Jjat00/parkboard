@@ -27,7 +27,9 @@ export async function GET(req: Request) {
    */
   const tag = params.get("tag")?.trim();
   const tagPrefix = params.get("tagPrefix")?.trim();
-  const byTag = Boolean(tag || tagPrefix);
+  /** Cards with no tag starting with this: e.g. the ones an agent has never touched. */
+  const withoutTagPrefix = params.get("withoutTagPrefix")?.trim();
+  const byTag = Boolean(tag || tagPrefix || withoutTagPrefix);
   const rows = await db.card.findMany({
     where,
     include: { project: CARD_PROJECT },
@@ -38,6 +40,7 @@ export async function GET(req: Request) {
   let cards = rows.map(openCard);
   if (tag) cards = cards.filter((c) => c.tags.includes(tag));
   if (tagPrefix) cards = cards.filter((c) => c.tags.some((t) => t.startsWith(tagPrefix)));
+  if (withoutTagPrefix) cards = cards.filter((c) => !c.tags.some((t) => t.startsWith(withoutTagPrefix)));
   if (q) {
     const n = /^#?(\d{1,9})$/.exec(q);
     cards = cards
