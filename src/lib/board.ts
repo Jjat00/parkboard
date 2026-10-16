@@ -39,6 +39,12 @@ export const CardInput = z.object({
     .nullish(),
   cwd: z.string().max(500).nullish(),
   vaultNote: z.string().max(300).nullish(),
+  /** GitHub "owner/name", in the shape GitHub allows for account and repository names. */
+  repo: z
+    .string()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/)
+    .refine((r) => !/\/\.{1,2}$/.test(r), "not a repository name")
+    .nullish(),
   /** Project id or slug. A new slug creates the project. */
   project: z.string().max(80).nullish(),
   x: z.number().optional(),

@@ -16,7 +16,7 @@ import type { Link } from "./types";
  * one before encryption (which never sees a sealed row) and the one after (which it can read and
  * never corrupts), so the two are never live together with the old one.
  */
-const CARD_TEXT = ["title", "notes", "session", "sessionId", "cwd", "vaultNote", "origin", "formerProject"] as const;
+const CARD_TEXT = ["title", "notes", "session", "sessionId", "cwd", "vaultNote", "repo", "origin", "formerProject"] as const;
 type CardText = (typeof CARD_TEXT)[number];
 
 type CardFields = { [K in CardText]?: string | null } & { links?: Link[]; tags?: string[] };
@@ -72,8 +72,8 @@ export function openCard<T extends Card & { project?: ProjectRow | null }>(row: 
 
 /** Every encrypted field of an opened card, to seal a plaintext row whole. */
 export function cardText(card: ReturnType<typeof openCard>) {
-  const { title, notes, session, sessionId, cwd, vaultNote, origin, formerProject, links, tags } = card;
-  return { title, notes, session, sessionId, cwd, vaultNote, origin, formerProject, links, tags };
+  const { title, notes, session, sessionId, cwd, vaultNote, repo, origin, formerProject, links, tags } = card;
+  return { title, notes, session, sessionId, cwd, vaultNote, repo, origin, formerProject, links, tags };
 }
 
 /** Encrypts a project's name and slug; the slug also gets the blind index used to find it. */

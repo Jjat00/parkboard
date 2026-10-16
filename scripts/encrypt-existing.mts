@@ -18,7 +18,7 @@ const projectIsStale = (p: ProjectRow) => !p.encrypted || !p.slugIndex || needsS
 
 const cardIsStale = (c: CardRow) =>
   !c.encrypted ||
-  [c.title, c.notes, c.session, c.sessionId, c.cwd, c.vaultNote, c.origin, c.formerProject].some((v) => v && needsSeal(v)) ||
+  [c.title, c.notes, c.session, c.sessionId, c.cwd, c.vaultNote, c.repo, c.origin, c.formerProject].some((v) => v && needsSeal(v)) ||
   (typeof c.links === "string" && needsSeal(c.links)) ||
   (c.tags.length > 0 && needsSeal(c.tags[0]));
 

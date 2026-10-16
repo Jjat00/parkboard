@@ -4,12 +4,13 @@
 // Output: human text on a TTY, JSON when piped or with --json. Diagnostics go to stderr.
 // Exit codes: 0 ok, 1 API or network error, 2 usage error, 3 not configured, 4 not found.
 
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-const VERSION = "0.3.5";
+const VERSION = "0.3.6";
 const CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "parkboard", "config.json");
 const ENUMS = {
   status: ["idea", "pending", "doing", "done"],
@@ -45,6 +46,7 @@ const SCHEMA = {
         "--agent, --session-id, --cwd": "override the detected agent session (CLAUDE_CODE_SESSION_ID or CODEX_THREAD_ID, and the current directory)",
         "--no-session": "do not attach the agent session",
         "--vault": "Obsidian note path",
+        "--repo": "GitHub repository as owner/name (or its URL); add detects it from the git remote of the session directory, set --repo '' clears it",
         "--origin": "claude-code|codex|cli… (default: the API key name)",
         "--dry-run": "print the request, send nothing",
       },
@@ -75,11 +77,11 @@ const SCHEMA = {
 const HELP = `park ${VERSION}: park things for later on your Parkboard
 
 Usage:
-  park add "<title>" [-p project] [--priority high] [--kind idea] [--notes …] [--tag t] [--link url] [--summary …]
+  park add "<title>" [-p project] [--priority high] [--kind idea] [--notes …] [--tag t] [--link url] [--summary …] [--repo owner/name]
                          (the Claude Code or Codex session is attached automatically)
   park ls [-p project] [--status open|all|idea|pending|doing|done] [-q text]
   park show 12           a card is its number (12 or #12) or its full id
-  park set 12 [--status doing] [--priority …] [--project …] [--title …]
+  park set 12 [--status doing] [--priority …] [--project …] [--title …] [--repo owner/name]
   park done 12
   park rm 12 --yes
   park projects
@@ -159,6 +161,7 @@ function cardBody(v) {
     }),
     session: v.summary ?? v.session,
     vaultNote: v.vault,
+    repo: v.repo === undefined ? undefined : v.repo.trim() ? (githubRepo(v.repo) ?? die(2, `--repo must be owner/name or a GitHub URL: ${v.repo}`)) : null,
     agent: v.agent,
     sessionId: v["session-id"],
     cwd: v.cwd,
@@ -166,6 +169,31 @@ function cardBody(v) {
     project: v.project === undefined ? undefined : v.project || null,
   };
   return Object.fromEntries(Object.entries(body).filter(([, x]) => x !== undefined));
+}
+
+/** "owner/name" from a GitHub remote (SSH, HTTPS or owner/name itself); null for anything else. */
+export function githubRepo(value) {
+  const m = /^(?:(?:git\+)?ssh:\/\/git@github\.com\/|git@github\.com:|https?:\/\/(?:[^@/]+@)?(?:www\.)?github\.com\/)?([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9._-]{1,100}?)(?:\.git)?\/?$/.exec(
+    String(value).trim(),
+  );
+  return m && !/^\.{1,2}$/.test(m[2]) ? `${m[1]}/${m[2]}` : null;
+}
+
+/** GitHub repository of a directory's origin remote, if it has one. */
+function detectRepo(dir) {
+  try {
+    const url = execFileSync("git", ["-C", dir, "remote", "get-url", "origin"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 3000,
+    });
+    // Only a remote that names GitHub: a bare "a/b" remote is a relative path on disk.
+    return /^(?:(?:git\+)?ssh:\/\/git@github\.com\/|git@github\.com:|https?:\/\/(?:[^@/]+@)?(?:www\.)?github\.com\/)/.test(url.trim())
+      ? (githubRepo(url) ?? undefined)
+      : undefined;
+  } catch {
+    return undefined; // not a repository, no origin, or git missing
+  }
 }
 
 /** Directory where a Claude Code session started: `claude --resume` only finds it from there. */
@@ -242,6 +270,7 @@ function detail(card) {
     ["agent", [card.agent, card.sessionId].filter(Boolean).join(" · ")],
     ["resume", resumeCommand(card) ?? ""],
     ["summary", card.session ?? ""],
+    ["repo", card.repo ?? ""],
     ["vault", card.vaultNote ?? ""],
     ["created", card.createdAt],
   ];
@@ -276,6 +305,7 @@ async function main() {
       cwd: { type: "string" },
       "no-session": { type: "boolean" },
       vault: { type: "string" },
+      repo: { type: "string" },
       origin: { type: "string" },
       query: { type: "string", short: "q" },
       limit: { type: "string" },
@@ -308,6 +338,10 @@ async function main() {
       const title = positionals.join(" ").trim();
       if (!title) die(2, 'add needs a title: park add "…"');
       const body = { ...cardBody({ ...v, title }), ...detectSession(v) };
+      if (v.repo === undefined) {
+        const repo = detectRepo(body.cwd ?? process.cwd());
+        if (repo) body.repo = repo;
+      }
       if (v["dry-run"]) return print({ dry_run: true, request: { method: "POST", path: "/api/cards", body } }, (d) => JSON.stringify(d.request, null, 2));
       const { card } = await request("POST", "/api/cards", body);
       return print(card, (c) => `parked ${line(c)}`);

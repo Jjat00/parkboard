@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Bot, CircleCheck, Copy, ExternalLink, Trash2, X } from "lucide-react";
 import { api, type ApiKeyDTO } from "@/lib/api";
 import { AREA, KIND, PRIORITY, STATUS, type AreaKey } from "@/lib/labels";
+import { githubRepo } from "@/lib/repo";
 import { AGENT_LABEL, resumeCommand } from "@/lib/session";
 import { ago, dayLabel } from "@/lib/time";
 import type { CardDTO, Link, ProjectDTO } from "@/lib/types";
@@ -35,13 +36,14 @@ function Shell({
   );
 }
 
-type TextKey = "title" | "notes" | "session" | "vaultNote" | "tagsText";
-type Draft = Omit<CardDTO, "session" | "vaultNote"> & { session: string; vaultNote: string; tagsText: string };
+type TextKey = "title" | "notes" | "session" | "vaultNote" | "repo" | "tagsText";
+type Draft = Omit<CardDTO, "session" | "vaultNote" | "repo"> & { session: string; vaultNote: string; repo: string; tagsText: string };
 
 const toDraft = (card: CardDTO): Draft => ({
   ...card,
   session: card.session ?? "",
   vaultNote: card.vaultNote ?? "",
+  repo: card.repo ?? "",
   tagsText: card.tags.join(", "),
 });
 
@@ -56,6 +58,9 @@ function textPatch(key: TextKey, value: string): Parameters<typeof api.updateCar
       return { session: value.trim() ? value : null };
     case "vaultNote":
       return { vaultNote: value.trim() ? value.trim() : null };
+    case "repo":
+      // A pasted GitHub URL is saved as owner/name; anything else goes as typed and the API rejects it.
+      return { repo: value.trim() ? (githubRepo(value) ?? value.trim()) : null };
     case "tagsText":
       return { tags: value.split(",").map((t) => t.trim()).filter(Boolean) };
   }
@@ -367,6 +372,15 @@ export function CardPanel({
             onChange={(e) => edit("vaultNote", e.target.value)}
             onBlur={() => commit("vaultNote")}
             placeholder="Ideas/Nombre de la nota"
+            className={`${input} font-mono text-xs`}
+          />
+        </Field>
+        <Field label="Repositorio de GitHub">
+          <input
+            value={draft.repo ?? ""}
+            onChange={(e) => edit("repo", e.target.value)}
+            onBlur={() => commit("repo")}
+            placeholder="owner/nombre o la URL del repo"
             className={`${input} font-mono text-xs`}
           />
         </Field>

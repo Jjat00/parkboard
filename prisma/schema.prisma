@@ -59,7 +59,7 @@ model Project {
   @@unique([ownerId, slugIndex])
 }
 
-/// Title, notes, links, tags, origin, session, sessionId, cwd, vaultNote and formerProject are stored encrypted
+/// Title, notes, links, tags, origin, session, sessionId, cwd, vaultNote, repo and formerProject are stored encrypted
 /// (src/lib/sealed.ts): links holds one sealed string, tags a single sealed element.
 model Card {
   id        String    @id @default(cuid())
@@ -88,6 +88,9 @@ model Card {
   cwd       String?
   /// Obsidian note, e.g. "Ideas/CLI de Google Flow por ingeniería inversa"
   vaultNote String?
+  /// GitHub repository the work belongs to, as "owner/name". The CLI fills it from the git remote
+  /// of the directory it runs in; agents that work a card start from here.
+  repo      String?
   /// Name (encrypted) and color of the project the card was in when that project was deleted,
   /// so a done card still counts for its project in the activity dashboard.
   formerProject String?

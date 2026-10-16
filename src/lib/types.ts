@@ -34,6 +34,8 @@ export type CardDTO = {
   sessionId: string | null;
   cwd: string | null;
   vaultNote: string | null;
+  /** GitHub repository, "owner/name". */
+  repo: string | null;
   projectId: string | null;
   /** Name and color of the project the card was in when that project was deleted. */
   formerProject: string | null;
