@@ -25,6 +25,14 @@ to it is one card away.
   done, moved or deleted the project goes away (its done cards stay as loose ideas).
 - **Tasks, Ideas and Notes views**: the canvas shows one at a time (bugs and research go with tasks), so ideas and notes do not crowd the work.
 - **Personal and work areas**, text filter, and done cards out of the way in a Done panel grouped by day.
+- **A GitHub repo per card** (`owner/name`): `park add` detects it from the git remote of the folder you park from,
+  so a coding task always says where its code lives.
+- **Activity dashboard** (`/dashboard`, the **Actividad** button): cards done and parked over any period, time to
+  close, open cards over time, when you work, your year, breakdowns by project, kind, priority, area and origin, and
+  an Autopilot panel. Done cards keep their project's name and color after the project is gone, so they still count.
+- **Autopilot** (optional, [`autopilot/`](autopilot/README.md)): a scheduled worker that takes the cards you tag
+  `auto`, solves them with Claude Code and opens a **draft** pull request for each one; only trivial changes go
+  straight to `main`, tagged `auto-main`.
 - **CLI `park`** with no dependencies: JSON when piped, `--dry-run` on writes, `park schema` for agents.
 - **Encrypted at rest**: titles, notes, links, tags, project names and session details are stored with
   AES-256-GCM under a key kept outside the database (`PARKBOARD_ENCRYPTION_KEYS`), each value bound to its owner
@@ -98,7 +106,7 @@ park config --url https://your-board.example.com --key pk_…
 park add "Try surfacer on the recon report" -p google-flow --kind research --priority high
 park ls                                  # open cards; -q text to search, -p project to filter
 park show 12                             # everything about #12, including how to resume its session
-park set 12 --status doing               # or --priority, --project, --title…
+park set 12 --status doing               # or --priority, --project, --title, --repo owner/name…
 park done 12
 park export > board.json                 # the whole board, done cards included
 park project ungga-crm --area work       # change a project's area (or --name to rename it)
@@ -114,7 +122,17 @@ All routes accept `Authorization: Bearer pk_…` or a Clerk session.
 | Method | Path | |
 |---|---|---|
 | GET | `/api/board` | projects and cards |
-| GET, POST | `/api/cards` | `?status=open\|idea\|pending\|doing\|done&project=&q=&limit=` |
-| GET, PATCH, DELETE | `/api/cards/:id` | the id or the short number |
+| GET, POST | `/api/cards` | `?status=open\|idea\|pending\|doing\|done&project=&q=&limit=`, plus `tag=`, `tagPrefix=` and `withoutTagPrefix=` (these return every match) |
+| GET, PATCH, DELETE | `/api/cards/:id` | the id or the short number; a PATCH with `ifUpdatedAt` only applies if the card was not changed since (409 otherwise) |
 | GET, POST | `/api/projects` | |
 | PATCH, DELETE | `/api/projects/:id` | deleting a project turns its cards into loose ideas |
+
+## Autopilot
+
+[`autopilot/`](autopilot/README.md) is a separate Node script with no dependencies, packaged as a Docker image to
+run as a cron job (Parkboard's runs hourly on Railway). Each run picks one card tagged `auto` that is pending, has a
+`repo` listed in [`autopilot/repos.json`](autopilot/repos.json) with its verifiers, and passes a fixed gate and a
+triage; it then works the card in an isolated clone, checks the result and opens a draft PR. It also follows the PRs
+it opened and tags the card `auto-pr-fusionado` or `auto-pr-cerrado` once GitHub says so. `node
+autopilot/autopilot.mjs --dry-run` shows what it would do without changing anything. Details in its
+[README](autopilot/README.md).

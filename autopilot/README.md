@@ -15,6 +15,8 @@ Works the Parkboard cards you tag `auto` and opens a **draft** pull request for 
 
 While a run works a card it holds it with one tag, `auto-en-curso-<id>-<repo>`, and the card is `doing`; close it, move it, remove `auto` or change its repo to cancel the run before it publishes. The outcome goes back on the card: tag `auto-pr` with the PR link, or `auto-bloqueada` with the reason in the notes. A run that dies is recovered after its lease (3 h): its PR is linked, or the card is handed back. To retry a blocked card, fix it, remove `auto-bloqueada` and add `auto` again. If the Claude plan hits its usage limit, the card is left untouched for the next run.
 
+Every run also follows the PRs it opened. Once GitHub says one was merged, `auto-pr` becomes `auto-pr-fusionado` and the card is closed; closed without merging, it becomes `auto-pr-cerrado` and a card still `doing` goes back to pending (without `auto`, so it is not retried on its own).
+
 ## Run
 
 ```sh

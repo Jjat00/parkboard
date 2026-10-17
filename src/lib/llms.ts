@@ -24,6 +24,9 @@ const HOW = `## How it works
 - Status idea, pending, doing, done; priority low to urgent; personal and work areas; short per-user numbers (#12).
 - Projects live while they have open cards: parking into an unknown project creates it, closing the last open card removes it.
 - Done cards leave the canvas for a Done panel grouped by day.
+- Each card can carry its GitHub repository (owner/name); \`park add\` detects it from the git remote of the session folder.
+- Activity dashboard at /dashboard: cards done and parked per period, time to close, breakdowns by project, kind, priority, area and origin.
+- Optional Autopilot (in the repo, \`autopilot/\`): a scheduled worker that solves cards tagged \`auto\` with Claude Code and opens a draft pull request for each.
 - CLI \`park\` with no dependencies (Node 20+): JSON when piped, \`--dry-run\` on writes, \`park schema\` describes every command for agents.
 - API keys for the CLI, stored only as SHA-256 hashes.
 
@@ -45,10 +48,10 @@ const CLI = `## CLI reference
 \`\`\`
 park add "<title>" [-p project] [--kind task|idea|bug|research|note] [--priority low|medium|high|urgent]
                    [--status idea|pending|doing|done] [--notes "…"] [--tag t] [--link url] [--summary "…"]
-                   [--area personal|work|none] [--vault "note path"] [--dry-run]
+                   [--area personal|work|none] [--vault "note path"] [--repo owner/name] [--dry-run]
 park ls [-p project] [--status open|all|idea|pending|doing|done] [-q text] [--limit 50]
 park show 12              # a card is its number (12 or #12) or its full id
-park set 12 [--status doing] [--priority …] [--project …] [--title …]   # --project '' makes it a loose idea
+park set 12 [--status doing] [--priority …] [--project …] [--title …] [--repo owner/name]   # --project '' makes it a loose idea
 park done 12
 park rm 12 --yes
 park projects
@@ -67,8 +70,8 @@ All routes take \`Authorization: Bearer pk_…\` (or the web session) and only e
 | Method | Path | Notes |
 |---|---|---|
 | GET | /api/board | every project and card |
-| GET, POST | /api/cards | \`?status=open\\|idea\\|pending\\|doing\\|done&project=&q=&limit=\` |
-| GET, PATCH, DELETE | /api/cards/:id | id or short number |
+| GET, POST | /api/cards | \`?status=open\\|idea\\|pending\\|doing\\|done&project=&q=&limit=\`, plus \`tag=\`, \`tagPrefix=\`, \`withoutTagPrefix=\` (every match) |
+| GET, PATCH, DELETE | /api/cards/:id | id or short number; PATCH with \`ifUpdatedAt\` applies only if the card is unchanged (409 otherwise) |
 | GET, POST | /api/projects | |
 | PATCH, DELETE | /api/projects/:id | deleting a project turns its cards into loose ideas |
 
