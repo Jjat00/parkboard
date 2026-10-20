@@ -59,7 +59,7 @@ So that you park things without being reminded, add the block below to the instr
 - Claude Code: \`~/.claude/CLAUDE.md\`
 - Codex: in \`$CODEX_HOME\` (default \`~/.codex\`), \`AGENTS.override.md\` if it exists and is not empty (Codex then loads it instead of \`AGENTS.md\`), otherwise \`AGENTS.md\`
 - Gemini CLI: \`~/.gemini/GEMINI.md\`
-- OpenCode: \`~/.config/opencode/AGENTS.md\` if it exists; if it does not and \`~/.claude/CLAUDE.md\` exists, OpenCode is loading that one, so add the block there instead of creating a new file
+- OpenCode: \`~/.config/opencode/AGENTS.md\` if it exists; if it does not, \`~/.claude/CLAUDE.md\` exists and neither \`OPENCODE_DISABLE_CLAUDE_CODE\` nor \`OPENCODE_DISABLE_CLAUDE_CODE_PROMPT\` is set, OpenCode is loading that one, so add the block there instead of creating a new file
 - Windsurf: \`~/.codeium/windsurf/memories/global_rules.md\`
 - Cursor and other agents whose global rules live in the app's settings: show the block to the person and ask them to paste it there; meanwhile add it to the project's \`AGENTS.md\`.
 - Any other agent: the file it reads on every session start, often \`AGENTS.md\`. If you do not know which one, ask.
