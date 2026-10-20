@@ -4,9 +4,12 @@ import { redirect } from "next/navigation";
 import { Dashboard } from "@/components/dashboard";
 import { actorFromSession } from "@/lib/auth";
 import { getBoard } from "@/lib/board";
+import { preferredLang } from "@/lib/lang";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
 
-export const metadata: Metadata = { title: "Actividad · Parkboard" };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: `${(await preferredLang()) === "es" ? "Actividad" : "Activity"} · Parkboard` };
+}
 
 export default async function DashboardPage() {
   const { isAuthenticated, redirectToSignIn } = await auth();

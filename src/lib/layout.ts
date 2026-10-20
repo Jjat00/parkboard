@@ -15,13 +15,22 @@ const EMPTY_H = 44;
 const STATUS_ORDER = { DOING: 0, PENDING: 1, IDEA: 2, DONE: 3 } as const;
 const PRIORITY_ORDER = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
 
+/** Sort options and their labels, per language. Keys are what gets saved in localStorage. */
 export const SORT_MODES = {
-  oldest: "Más antiguas",
-  auto: "En curso y prioridad",
-  newest: "Más recientes",
-  updated: "Última actualización",
+  es: {
+    oldest: "Más antiguas",
+    auto: "En curso y prioridad",
+    newest: "Más recientes",
+    updated: "Última actualización",
+  },
+  en: {
+    oldest: "Oldest first",
+    auto: "In progress & priority",
+    newest: "Newest first",
+    updated: "Last updated",
+  },
 } as const;
-export type SortMode = keyof typeof SORT_MODES;
+export type SortMode = keyof typeof SORT_MODES.es;
 
 /** oldest (default): creation order, so a plan reads top to bottom. auto: in progress first, then by priority, then oldest first. The rest sort by date. */
 export function sortCards(cards: CardDTO[], mode: SortMode = "oldest") {
@@ -99,7 +108,7 @@ export function resolveOverlaps(projects: ProjectDTO[], sizes: Map<string, { wid
 }
 
 /**
- * Tidy layout for the "Acomodar" button: work projects first, then personal, each project
+ * Tidy layout for the "Acomodar" (Arrange) button: work projects first, then personal, each project
  * going to the shortest of two or three columns.
  */
 export function arrangeProjects(projects: ProjectDTO[], sizes: Map<string, { width: number; height: number }>) {

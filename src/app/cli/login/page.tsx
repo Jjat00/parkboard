@@ -6,7 +6,10 @@ import { preferredLang } from "@/lib/lang";
 import { authorizeCli } from "./actions";
 import { parseLoginRequest } from "./request";
 
-export const metadata: Metadata = { title: "Conectar el CLI · Parkboard", robots: { index: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  const title = (await preferredLang()) === "es" ? "Conectar el CLI" : "Connect the CLI";
+  return { title: `${title} · Parkboard`, robots: { index: false } };
+}
 
 const COPY = {
   en: {

@@ -11,21 +11,70 @@ import {
   useNodesState,
   useReactFlow,
   type Node,
+  type ReactFlowProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { ArrowDownUp, ChartColumn, CircleCheck, ChevronsDownUp, ChevronsUpDown, FolderPlus, KeyRound, LayoutGrid, Plus, Search } from "lucide-react";
 import { api } from "@/lib/api";
-import { AREA, VIEWS, viewOf, type AreaKey, type ViewKey } from "@/lib/labels";
+import { labels, VIEW_KEYS, viewOf, type AreaKey, type ViewKey } from "@/lib/labels";
 import { arrangeProjects, CARD_W, INBOX_ID, layoutProject, resolveOverlaps, SORT_MODES, type SortMode } from "@/lib/layout";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
+import { LangSwitch, useLang } from "./lang";
 import { nodeTypes, type CardNode, type ProjectNode } from "./nodes";
 import { CardPanel, DonePanel, KeysPanel, ProjectPanel } from "./panels";
 
 type BoardData = { projects: ProjectDTO[]; cards: CardDTO[] };
 type Filters = { area: AreaKey | "ALL"; q: string; sort: SortMode; view: ViewKey };
 type Rect = { x: number; y: number; width: number; height: number };
+
+const COPY = {
+  es: {
+    inbox: "Ideas sueltas",
+    moveTo: "Mover a…",
+    here: "aquí",
+    view: "Vista",
+    all: "Todo",
+    filter: "Filtrar",
+    sortTitle: "Orden de las tareas",
+    doneTitle: "Tareas terminadas",
+    done: "Hechas",
+    activityTitle: "Qué has hecho: por día, semana, mes o el rango que elijas",
+    activity: "Actividad",
+    goTo: "Ir a…",
+    project: "Proyecto",
+    projectName: "Nombre del proyecto",
+    arrangeTitle: "Acomodar: ordena los proyectos en columnas, trabajo primero",
+    arrange: "Acomodar proyectos",
+    collapseAll: "Compactar todas",
+    expandAll: "Expandir todas",
+    keysTitle: "Claves para el CLI y los agentes",
+    keys: "Claves para el CLI",
+  },
+  en: {
+    inbox: "Loose ideas",
+    moveTo: "Move to…",
+    here: "here",
+    view: "View",
+    all: "All",
+    filter: "Filter",
+    sortTitle: "Sort order",
+    doneTitle: "Finished tasks",
+    done: "Done",
+    activityTitle: "What you've done: by day, week, month or any range you pick",
+    activity: "Activity",
+    goTo: "Go to…",
+    project: "Project",
+    projectName: "Project name",
+    arrangeTitle: "Arrange: lays projects out in columns, work first",
+    arrange: "Arrange projects",
+    collapseAll: "Collapse all",
+    expandAll: "Expand all",
+    keysTitle: "Keys for the CLI and agents",
+    keys: "Keys for the CLI",
+  },
+} as const;
 
 const REFRESH_MS = 20_000;
 const EXPANDED_KEY = "parkboard.expanded";
@@ -48,7 +97,7 @@ function loadExpanded(): Set<string> {
 function loadSort(): SortMode | null {
   try {
     const sort = localStorage.getItem(SORT_KEY);
-    return sort && sort in SORT_MODES ? (sort as SortMode) : null;
+    return sort && sort in SORT_MODES.es ? (sort as SortMode) : null;
   } catch {
     return null;
   }
@@ -57,7 +106,7 @@ function loadSort(): SortMode | null {
 function loadView(): ViewKey | null {
   try {
     const view = localStorage.getItem(VIEW_KEY);
-    return view && view in VIEWS ? (view as ViewKey) : null;
+    return view && (VIEW_KEYS as readonly string[]).includes(view) ? (view as ViewKey) : null;
   } catch {
     return null;
   }
@@ -111,7 +160,25 @@ function useLayout({ projects, cards }: BoardData, filters: Filters, expanded: S
   }, [projects, cards, filters, expanded]);
 }
 
+/** React Flow's own controls, minimap and screen-reader hints, which default to English. */
+const FLOW_ARIA_ES: ReactFlowProps["ariaLabelConfig"] = {
+  "node.a11yDescription.default": "Pulsa Enter o espacio para seleccionar un elemento. Pulsa Suprimir para quitarlo y Escape para cancelar.",
+  "node.a11yDescription.keyboardDisabled":
+    "Pulsa Enter o espacio para seleccionar un elemento. Luego usa las flechas para moverlo. Pulsa Suprimir para quitarlo y Escape para cancelar.",
+  "node.a11yDescription.ariaLiveMessage": ({ direction, x, y }) =>
+    `Elemento movido hacia ${{ up: "arriba", down: "abajo", left: "la izquierda", right: "la derecha" }[direction] ?? direction}. Nueva posición, x: ${x}, y: ${y}`,
+  "edge.a11yDescription.default": "Pulsa Enter o espacio para seleccionar una conexión. Luego pulsa Suprimir para quitarla o Escape para cancelar.",
+  "controls.ariaLabel": "Panel de controles",
+  "controls.zoomIn.ariaLabel": "Acercar",
+  "controls.zoomOut.ariaLabel": "Alejar",
+  "controls.fitView.ariaLabel": "Ajustar a la vista",
+  "controls.interactive.ariaLabel": "Activar o bloquear la edición",
+  "minimap.ariaLabel": "Minimapa",
+  "handle.ariaLabel": "Conector",
+};
+
 function Canvas({ initial }: { initial: BoardData }) {
+  const lang = useLang();
   const [data, setData] = useState<BoardData>(initial);
   const [filters, setFilters] = useState<Filters>({ area: "ALL", q: "", sort: "oldest", view: "tasks" });
   const [showDone, setShowDone] = useState(false);
@@ -217,7 +284,7 @@ function Canvas({ initial }: { initial: BoardData }) {
         draggable: false,
         selectable: false,
         data: {
-          project: { id: INBOX_ID, slug: "", name: "Ideas sueltas", area: null, color: "#a1a09a", x: r.x, y: r.y, width: r.width, height: r.height, createdAt: "" },
+          project: { id: INBOX_ID, slug: "", name: COPY[lang].inbox, area: null, color: "#a1a09a", x: r.x, y: r.y, width: r.width, height: r.height, createdAt: "" },
           open: layouts.get(INBOX_ID)!.cards.size,
           empty: layouts.get(INBOX_ID)!.cards.size === 0,
           inbox: true,
@@ -244,7 +311,7 @@ function Canvas({ initial }: { initial: BoardData }) {
       });
     // Parents must come before their children.
     setNodes([...projectNodes, ...cardNodes]);
-  }, [layout, data.cards, selection, toggleExpanded, setNodes, layoutVersion, filters.sort]);
+  }, [layout, data.cards, selection, toggleExpanded, setNodes, layoutVersion, filters.sort, lang]);
 
   // Every local change bumps `mutations`, and every write is tracked in `pending` from request
   // to response (bumping `mutations` again when it lands). A refresh is dropped when it starts
@@ -385,12 +452,12 @@ function Canvas({ initial }: { initial: BoardData }) {
     async (title: string, projectId: string | null) => {
       const area = filters.area === "ALL" ? undefined : filters.area;
       const { card } = await track(
-        api.createCard({ title, project: projectId, area, kind: VIEWS[filters.view].kind, origin: "web" }),
+        api.createCard({ title, project: projectId, area, kind: labels(lang).VIEWS[filters.view].kind, origin: "web" }),
       );
       upsertCard(card);
       setSelection({ kind: "card", id: card.id });
     },
-    [filters.area, filters.view, upsertCard, track],
+    [filters.area, filters.view, lang, upsertCard, track],
   );
 
   const addProject = useCallback(
@@ -443,6 +510,7 @@ function Canvas({ initial }: { initial: BoardData }) {
       />
       <div className="relative flex-1">
         <ReactFlow
+          ariaLabelConfig={lang === "es" ? FLOW_ARIA_ES : undefined}
           nodes={nodes}
           onNodesChange={onNodesChange}
           nodeTypes={nodeTypes}
@@ -549,10 +617,11 @@ function dropTargetAt(event: MouseEvent | TouchEvent): string | null {
  * anywhere by dragging.
  */
 function DropRail({ projects, current }: { projects: ProjectDTO[]; current: string | null }) {
-  const targets = [{ id: INBOX_ID, name: "Ideas sueltas", color: "#a1a09a" }, ...projects];
+  const c = COPY[useLang()];
+  const targets = [{ id: INBOX_ID, name: c.inbox, color: "#a1a09a" }, ...projects];
   return (
     <div className="pointer-events-none absolute inset-y-0 left-0 z-30 flex w-56 flex-col gap-1.5 overflow-y-auto border-r border-line bg-ink/90 p-3 backdrop-blur">
-      <p className="px-1 pb-1 text-[11px] text-faint">Mover a…</p>
+      <p className="px-1 pb-1 text-[11px] text-faint">{c.moveTo}</p>
       {targets.map((t) => {
         const here = (t.id === INBOX_ID ? null : t.id) === current;
         return (
@@ -565,7 +634,7 @@ function DropRail({ projects, current }: { projects: ProjectDTO[]; current: stri
           >
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: t.color }} />
             <span className="truncate">{t.name}</span>
-            {here && <span className="ml-auto text-[10px]">aquí</span>}
+            {here && <span className="ml-auto text-[10px]">{c.here}</span>}
           </div>
         );
       })}
@@ -600,6 +669,9 @@ function Toolbar({
   onOpenDone: () => void;
   onOpenKeys: () => void;
 }) {
+  const lang = useLang();
+  const c = COPY[lang];
+  const { AREA, VIEWS } = labels(lang);
   const [title, setTitle] = useState("");
   const [projectId, setProjectId] = useState<string>("");
   const [newProject, setNewProject] = useState<string | null>(null);
@@ -611,8 +683,8 @@ function Toolbar({
         <span className="text-gradient text-lg font-semibold tracking-tight">Parkboard</span>
       </div>
 
-      <div className="flex items-center rounded-lg border border-line p-0.5 text-xs" role="tablist" aria-label="Vista">
-        {(Object.keys(VIEWS) as ViewKey[]).map((v) => (
+      <div className="flex items-center rounded-lg border border-line p-0.5 text-xs" role="tablist" aria-label={c.view}>
+        {VIEW_KEYS.map((v) => (
           <button
             key={v}
             role="tab"
@@ -647,7 +719,7 @@ function Toolbar({
           onChange={(e) => setProjectId(e.target.value)}
           className="w-[104px] shrink-0 truncate bg-transparent text-xs text-muted outline-none"
         >
-          <option value="">Ideas sueltas</option>
+          <option value="">{c.inbox}</option>
           {data.projects.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -663,7 +735,7 @@ function Toolbar({
             onClick={() => setFilters({ ...filters, area: a })}
             className={`rounded-md px-3 py-1 ${filters.area === a ? "bg-white/10 text-fg" : "text-muted hover:text-fg"}`}
           >
-            {a === "ALL" ? "Todo" : AREA[a]}
+            {a === "ALL" ? c.all : AREA[a]}
           </button>
         ))}
       </div>
@@ -673,21 +745,21 @@ function Toolbar({
         <input
           value={filters.q}
           onChange={(e) => setFilters({ ...filters, q: e.target.value })}
-          placeholder="Filtrar"
+          placeholder={c.filter}
           className="w-28 bg-transparent outline-none placeholder:text-faint"
         />
       </label>
 
-      <label className="flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2 py-1.5 text-xs text-muted" title="Orden de las tareas">
+      <label className="flex items-center gap-1.5 rounded-lg border border-line bg-panel px-2 py-1.5 text-xs text-muted" title={c.sortTitle}>
         <ArrowDownUp size={13} />
         <select
           value={filters.sort}
           onChange={(e) => setFilters({ ...filters, sort: e.target.value as SortMode })}
           className="bg-transparent outline-none"
         >
-          {(Object.keys(SORT_MODES) as SortMode[]).map((m) => (
+          {(Object.keys(SORT_MODES[lang]) as SortMode[]).map((m) => (
             <option key={m} value={m}>
-              {SORT_MODES[m]}
+              {SORT_MODES[lang][m]}
             </option>
           ))}
         </select>
@@ -696,17 +768,17 @@ function Toolbar({
       <button
         onClick={onOpenDone}
         className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
-        title="Tareas terminadas"
+        title={c.doneTitle}
       >
-        <CircleCheck size={14} /> Hechas <span className="font-mono text-faint">{doneCount}</span>
+        <CircleCheck size={14} /> {c.done} <span className="font-mono text-faint">{doneCount}</span>
       </button>
 
       <Link
         href="/dashboard"
         className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
-        title="Qué has hecho: por día, semana, mes o el rango que elijas"
+        title={c.activityTitle}
       >
-        <ChartColumn size={14} /> Actividad
+        <ChartColumn size={14} /> {c.activity}
       </Link>
 
       <select
@@ -717,7 +789,7 @@ function Toolbar({
         }}
         className="rounded-lg border border-line bg-panel px-2 py-1.5 text-xs text-muted outline-none"
       >
-        <option value="">Ir a…</option>
+        <option value="">{c.goTo}</option>
         {data.projects.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
@@ -730,7 +802,7 @@ function Toolbar({
           onClick={() => setNewProject("")}
           className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
         >
-          <FolderPlus size={14} /> Proyecto
+          <FolderPlus size={14} /> {c.project}
         </button>
       ) : (
         <form
@@ -745,7 +817,7 @@ function Toolbar({
             value={newProject}
             onChange={(e) => setNewProject(e.target.value)}
             onBlur={() => !newProject.trim() && setNewProject(null)}
-            placeholder="Nombre del proyecto"
+            placeholder={c.projectName}
             className="w-44 rounded-lg border border-cyan/60 bg-panel px-3 py-1.5 text-xs outline-none"
           />
         </form>
@@ -754,8 +826,8 @@ function Toolbar({
       <button
         onClick={onArrange}
         className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
-        title="Acomodar: ordena los proyectos en columnas, trabajo primero"
-        aria-label="Acomodar proyectos"
+        title={c.arrangeTitle}
+        aria-label={c.arrange}
       >
         <LayoutGrid size={14} />
       </button>
@@ -763,21 +835,22 @@ function Toolbar({
       <button
         onClick={() => onSetAllExpanded(!anyExpanded)}
         className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
-        title={anyExpanded ? "Compactar todas" : "Expandir todas"}
-        aria-label={anyExpanded ? "Compactar todas" : "Expandir todas"}
+        title={anyExpanded ? c.collapseAll : c.expandAll}
+        aria-label={anyExpanded ? c.collapseAll : c.expandAll}
       >
         {anyExpanded ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
       </button>
 
       <button
         onClick={onOpenKeys}
-        title="Claves para el CLI y los agentes"
-        aria-label="Claves para el CLI"
+        title={c.keysTitle}
+        aria-label={c.keys}
         className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg"
       >
         <KeyRound size={14} />
       </button>
 
+      <LangSwitch />
       <UserButton />
     </header>
   );

@@ -1,9 +1,12 @@
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { LANG_COOKIE, type Lang } from "./lang-shared";
 
-export type Lang = "es" | "en";
+export type { Lang } from "./lang-shared";
 
-/** Spanish when the browser prefers it over English, English otherwise. */
+/** The language picked with the ES/EN switch, else Spanish when the browser prefers it over English, else English. */
 export async function preferredLang(): Promise<Lang> {
+  const chosen = (await cookies()).get(LANG_COOKIE)?.value;
+  if (chosen === "es" || chosen === "en") return chosen;
   const accept = (await headers()).get("accept-language") ?? "";
   const ranked = accept
     .split(",")

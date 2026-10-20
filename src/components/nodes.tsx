@@ -3,7 +3,9 @@
 import { memo } from "react";
 import type { Node, NodeProps } from "@xyflow/react";
 import { Bot, Bug, ChevronDown, ChevronUp, FlaskConical, Lightbulb, Link2, SquareCheck, StickyNote } from "lucide-react";
-import { AREA, KIND, PRIORITY, STATUS, type KindKey, type StatusKey } from "@/lib/labels";
+import { labels, type KindKey, type StatusKey } from "@/lib/labels";
+import { LOCALE } from "@/lib/lang-shared";
+import { useLang } from "./lang";
 import { CARD_W, type SortMode } from "@/lib/layout";
 import { ago } from "@/lib/time";
 import { AGENT_LABEL } from "@/lib/session";
@@ -17,6 +19,27 @@ export type CardNode = Node<
   { card: CardDTO; expanded: boolean; height: number; onToggle: (id: string) => void; sort: SortMode },
   "card"
 >;
+
+const COPY = {
+  es: {
+    inboxEmpty: "Suelta aquí ideas sin proyecto",
+    projectEmpty: "Sin tareas visibles",
+    updated: "Actualizada",
+    created: "Creada",
+    open: "Clic para ver detalles",
+    collapse: "Compactar",
+    expand: "Expandir",
+  },
+  en: {
+    inboxEmpty: "Drop ideas without a project here",
+    projectEmpty: "No visible tasks",
+    updated: "Updated",
+    created: "Created",
+    open: "Click for details",
+    collapse: "Collapse",
+    expand: "Expand",
+  },
+} as const;
 
 const KIND_ICON: Record<KindKey, typeof Bug> = {
   TASK: SquareCheck,
@@ -35,6 +58,9 @@ const STATUS_DOT: Record<StatusKey, string> = {
 
 export const ProjectGroup = memo(function ProjectGroup({ data, width, height }: NodeProps<ProjectNode>) {
   const { project, open, empty, inbox } = data;
+  const lang = useLang();
+  const c = COPY[lang];
+  const { AREA } = labels(lang);
   return (
     <div
       className={`rounded-2xl border ${inbox ? "border-dashed bg-transparent" : "bg-panel/40"}`}
@@ -51,7 +77,7 @@ export const ProjectGroup = memo(function ProjectGroup({ data, width, height }: 
         <span className="ml-auto shrink-0 font-mono text-[10px] text-faint">{open}</span>
       </div>
       {empty && (
-        <p className="px-4 py-3 text-xs text-faint">{inbox ? "Suelta aquí ideas sin proyecto" : "Sin tareas visibles"}</p>
+        <p className="px-4 py-3 text-xs text-faint">{inbox ? c.inboxEmpty : c.projectEmpty}</p>
       )}
     </div>
   );
@@ -59,9 +85,12 @@ export const ProjectGroup = memo(function ProjectGroup({ data, width, height }: 
 
 export const CardItem = memo(function CardItem({ data, selected }: NodeProps<CardNode>) {
   const { card, expanded, height, onToggle, sort } = data;
+  const lang = useLang();
+  const c = COPY[lang];
+  const { KIND, PRIORITY, STATUS } = labels(lang);
   // Show the date the board is sorted by.
   const when = sort === "updated" ? card.updatedAt : card.createdAt;
-  const whenTitle = `${sort === "updated" ? "Actualizada" : "Creada"} ${new Date(when).toLocaleString("es-CO")}`;
+  const whenTitle = `${sort === "updated" ? c.updated : c.created} ${new Date(when).toLocaleString(LOCALE[lang])}`;
   const Icon = KIND_ICON[card.kind];
   const done = card.status === "DONE";
   const urgent = card.priority === "HIGH" || card.priority === "URGENT";
@@ -73,7 +102,7 @@ export const CardItem = memo(function CardItem({ data, selected }: NodeProps<Car
         selected ? "border-white/25" : "border-line"
       } ${done ? "opacity-50" : ""}`}
       style={{ width: CARD_W, height }}
-      title="Clic para ver detalles"
+      title={c.open}
     >
       <div className="flex items-start gap-2">
         <span
@@ -94,7 +123,7 @@ export const CardItem = memo(function CardItem({ data, selected }: NodeProps<Car
             onToggle(card.id);
           }}
           className="nodrag -mt-0.5 -mr-1 shrink-0 rounded p-0.5 text-faint opacity-0 group-hover:opacity-100 hover:bg-white/10 hover:text-fg"
-          aria-label={expanded ? "Compactar" : "Expandir"}
+          aria-label={expanded ? c.collapse : c.expand}
         >
           <Toggle size={14} />
         </button>
@@ -132,7 +161,7 @@ export const CardItem = memo(function CardItem({ data, selected }: NodeProps<Car
                   {AGENT_LABEL[card.agent] ?? card.agent} ·
                 </>
               )}{" "}
-              {ago(when)}
+              {ago(when, lang)}
             </span>
           </div>
         </div>
@@ -145,7 +174,7 @@ export const CardItem = memo(function CardItem({ data, selected }: NodeProps<Car
           <span>{KIND[card.kind]}</span>
           {urgent && <span style={{ color: PRIORITY[card.priority].color }}>· {PRIORITY[card.priority].label}</span>}
           <span className="ml-auto font-mono" title={whenTitle}>
-            {ago(when)}
+            {ago(when, lang)}
           </span>
         </div>
       )}

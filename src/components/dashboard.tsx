@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft, Bot, CalendarDays, Check, ChevronLeft, ChevronRight, CircleCheck, ExternalLink, Plus } from "lucide-react";
-import { AREA, PRIORITY, type AreaKey, type ViewKey } from "@/lib/labels";
+import { labels, VIEW_KEYS, type AreaKey, type ViewKey } from "@/lib/labels";
 import {
   addDays,
   byArea,
@@ -29,6 +29,7 @@ import {
   parseDay,
   perDay,
   periodRange,
+  PRESET_KEYS,
   PRESETS,
   previousRange,
   rangeLabel,
@@ -36,8 +37,8 @@ import {
   startOfDay,
   startOfWeek,
   unitFor,
-  VIEW_OPTIONS,
-  WEEKDAYS,
+  viewOptions,
+  weekdays,
   weekHourGrid,
   type Bucket,
   type Event,
@@ -50,12 +51,214 @@ import {
 } from "@/lib/stats";
 import { AUTOPILOT_STATE, autopilotRows, type AutopilotRow, type AutopilotState } from "@/lib/autopilot";
 import { ago } from "@/lib/time";
+import { LOCALE } from "@/lib/lang-shared";
 import type { CardDTO, ProjectDTO } from "@/lib/types";
+import { LangSwitch, useLang } from "@/components/lang";
 
 const SURFACE = "#111110";
 const GRID = "#232323";
 const AXIS = "#666666";
-const fmt = new Intl.NumberFormat("es-CO");
+const NUM = { es: new Intl.NumberFormat(LOCALE.es), en: new Intl.NumberFormat(LOCALE.en) };
+
+const COPY = {
+  es: {
+    board: "Tablero",
+    title: "Actividad",
+    loading: "Cargando…",
+    // Filters
+    area: "Área",
+    view: "Vista",
+    project: "Proyecto",
+    all: "Todo",
+    allProjects: "Todos los proyectos",
+    closedSuffix: " (cerrado)",
+    clearFilters: "Quitar filtros",
+    comparedWith: "comparado con",
+    // Period picker
+    custom: "Personalizado",
+    prevMonth: "Mes anterior",
+    nextMonth: "Mes siguiente",
+    from: "Desde",
+    to: "Hasta",
+    rangeTo: "a",
+    apply: "Aplicar",
+    calendarDays: ["L", "M", "X", "J", "V", "S", "D"],
+    // Tiles
+    sameAsBefore: "igual que antes",
+    balance: "Balance",
+    balanceUp: "cerraste más de lo que entró",
+    balanceDown: "entró más de lo que cerraste",
+    activeProjects: "Proyectos con actividad",
+    liveProjects: (n: number) => `${n} proyectos abiertos en el tablero`,
+    leadTime: "Tiempo típico de cierre",
+    leadBefore: (d: string) => `antes ${d} · mediana`,
+    leadMedian: "mediana de lo terminado",
+    streak: "Racha",
+    days: (n: number) => `${n} ${n === 1 ? "día" : "días"}`,
+    streakHint: (longest: number, active: number, span: number) => `récord ${longest} · activo ${active}/${span} días`,
+    // Charts
+    overTime: "Actividad en el tiempo",
+    overTimeAria: "Terminadas y parqueadas en el tiempo",
+    per: { hour: "Por hora.", day: "Por día.", week: "Por semana.", month: "Por mes." },
+    drillHint: "Clic en una columna para verla sola.",
+    drillTip: "Clic para ver solo este periodo",
+    done: "terminadas",
+    parked: "parqueadas",
+    byProject: "Por proyecto",
+    byProjectSub: (n: number) => `${n} con movimiento · clic en uno para filtrar`,
+    leadTitle: "Cuánto tardas en cerrar",
+    leadSub: (d: string) => `De parqueada a terminada · mediana ${d}`,
+    leadEmpty: "Sin tarjetas terminadas en el periodo",
+    leadAria: "Histograma del tiempo de cierre",
+    leadTip: (bin: string) => `Se cerraron en ${bin}`,
+    cards: "tarjetas",
+    openTitle: "Pendientes abiertas",
+    openSub: (open: number, urgent: number) => `Hoy hay ${open} abiertas · ${urgent} urgentes o altas`,
+    openAria: "Pendientes abiertas en el tiempo",
+    openTip: "abiertas al cierre",
+    whenTitle: "Cuándo trabajas",
+    whenSub: (metric: string, day: number, hour: number) => `Más ${metric} los ${weekdays("es")[day].toLowerCase()} · hora pico ${hour}:00`,
+    noData: "Sin datos en el periodo",
+    measure: "Medir",
+    less: "menos",
+    more: "más",
+    year: "Tu año",
+    yearSummary: (total: ReactNode, metric: string, active: ReactNode) => (
+      <>
+        {total} {metric} en el último año · {active} días con actividad
+      </>
+    ),
+    yearHint: "Lo que queda fuera del periodo se ve atenuado. Clic en un día para verlo.",
+    inPeriod: (metric: string) => `${metric} en el periodo`,
+    byKind: "Por tipo",
+    byPriority: "Por prioridad",
+    byArea: "Por área",
+    byOrigin: "Quién la parqueó",
+    empty: "Nada en este periodo.",
+    // Project table
+    noProjects: "Ningún proyecto tuvo movimiento en este periodo.",
+    cols: { project: "Proyecto", activity: "Actividad", done: "Hechas", created: "Nuevas", open: "Abiertas", last: "Último mov." },
+    filterProject: "Filtrar por este proyecto",
+    closed: "cerrado",
+    // Log
+    log: "Bitácora",
+    logSub: (n: number) => `${n} movimientos en el periodo, lo más reciente arriba`,
+    logEmpty: "Sin movimiento en este periodo.",
+    logDay: (done: number, created: number) => `${done} hechas, ${created} nuevas`,
+    doneOne: "Terminada",
+    parkedOne: "Parqueada",
+    took: (d: string) => `tomó ${d}`,
+    showMore: (n: number) => `Mostrar más (${n} restantes)`,
+    oldest: "Lo que más lleva esperando",
+    oldestSub: "Pendientes abiertas más antiguas",
+    noOpen: "No hay pendientes abiertas.",
+    // Autopilot: state labels come from AUTOPILOT_STATE as they are.
+    autopilotSub: "Tarjetas que Claude toma solo: las que tienen la etiqueta auto y lo que hizo con ellas. Estado actual, no depende del periodo.",
+    autopilotNone: "Ninguna tarjeta en este estado.",
+    autopilotEmpty: "Ninguna tarjeta tiene la etiqueta auto todavía. Ponla en una task o bug con repo para que Autopilot la tome.",
+    autopilotState: null,
+  },
+  en: {
+    board: "Board",
+    title: "Activity",
+    loading: "Loading…",
+    area: "Area",
+    view: "View",
+    project: "Project",
+    all: "All",
+    allProjects: "All projects",
+    closedSuffix: " (closed)",
+    clearFilters: "Clear filters",
+    comparedWith: "compared with",
+    custom: "Custom",
+    prevMonth: "Previous month",
+    nextMonth: "Next month",
+    from: "From",
+    to: "To",
+    rangeTo: "to",
+    apply: "Apply",
+    calendarDays: ["M", "T", "W", "T", "F", "S", "S"],
+    sameAsBefore: "same as before",
+    balance: "Balance",
+    balanceUp: "you closed more than came in",
+    balanceDown: "more came in than you closed",
+    activeProjects: "Active projects",
+    liveProjects: (n: number) => `${n} open ${n === 1 ? "project" : "projects"} on the board`,
+    leadTime: "Typical time to close",
+    leadBefore: (d: string) => `before ${d} · median`,
+    leadMedian: "median of what got done",
+    streak: "Streak",
+    days: (n: number) => `${n} ${n === 1 ? "day" : "days"}`,
+    streakHint: (longest: number, active: number, span: number) => `best ${longest} · active ${active}/${span} days`,
+    overTime: "Activity over time",
+    overTimeAria: "Done and parked over time",
+    per: { hour: "By hour.", day: "By day.", week: "By week.", month: "By month." },
+    drillHint: "Click a column to see it alone.",
+    drillTip: "Click to see just this period",
+    done: "done",
+    parked: "parked",
+    byProject: "By project",
+    byProjectSub: (n: number) => `${n} with activity · click one to filter`,
+    leadTitle: "How long you take to close",
+    leadSub: (d: string) => `From parked to done · median ${d}`,
+    leadEmpty: "No cards done in the period",
+    leadAria: "Histogram of time to close",
+    leadTip: (bin: string) => `Closed in ${bin}`,
+    cards: "cards",
+    openTitle: "Open items",
+    openSub: (open: number, urgent: number) => `${open} open today · ${urgent} urgent or high`,
+    openAria: "Open items over time",
+    openTip: "open at the end",
+    whenTitle: "When you work",
+    whenSub: (metric: string, day: number, hour: number) => `Most ${metric} on ${weekdays("en", "long")[day]}s · peak hour ${hour}:00`,
+    noData: "No data in the period",
+    measure: "Measure",
+    less: "less",
+    more: "more",
+    year: "Your year",
+    yearSummary: (total: ReactNode, metric: string, active: ReactNode) => (
+      <>
+        {total} {metric} in the last year · {active} active days
+      </>
+    ),
+    yearHint: "Days outside the period are dimmed. Click a day to see it.",
+    inPeriod: (metric: string) => `${metric} in the period`,
+    byKind: "By kind",
+    byPriority: "By priority",
+    byArea: "By area",
+    byOrigin: "Who parked it",
+    empty: "Nothing in this period.",
+    noProjects: "No project had activity in this period.",
+    cols: { project: "Project", activity: "Activity", done: "Done", created: "New", open: "Open", last: "Last activity" },
+    filterProject: "Filter by this project",
+    closed: "closed",
+    log: "Log",
+    logSub: (n: number) => `${n} ${n === 1 ? "event" : "events"} in the period, newest first`,
+    logEmpty: "No activity in this period.",
+    logDay: (done: number, created: number) => `${done} done, ${created} new`,
+    doneOne: "Done",
+    parkedOne: "Parked",
+    took: (d: string) => `took ${d}`,
+    showMore: (n: number) => `Show more (${n} left)`,
+    oldest: "Waiting the longest",
+    oldestSub: "Oldest open items",
+    noOpen: "Nothing open.",
+    autopilotSub: "Cards Claude picks up on its own: the ones tagged auto and what it did with them. Current state, not tied to the period.",
+    autopilotNone: "No cards in this state.",
+    autopilotEmpty: "No card has the auto tag yet. Add it to a task or bug with a repo for Autopilot to pick it up.",
+    /** AUTOPILOT_STATE in lib/autopilot is in Spanish; its English labels live here. */
+    autopilotState: {
+      queued: { label: "Queued", hint: "tagged auto, waiting for the next pass" },
+      working: { label: "Working", hint: "a run has it now" },
+      pr: { label: "PR to review", hint: "open PR for you to review" },
+      prMerged: { label: "PR merged", hint: "you merged its PR" },
+      prClosed: { label: "PR closed", hint: "its PR was closed without merging" },
+      main: { label: "On main", hint: "trivial change merged on its own" },
+      blocked: { label: "Sent back", hint: "it could not do it; the reason is in its notes" },
+      done: { label: "Closed", hint: "you closed it before its PR played out" },
+    } satisfies Record<AutopilotState, { label: string; hint: string }>,
+  },
+};
 
 /* ───────────────────────── URL state ───────────────────────── */
 
@@ -71,7 +274,7 @@ function readUrl(search: string): State {
   const period: Period =
     from && to
       ? { preset: "custom", range: from <= to ? { start: from, end: addDays(to, 1) } : { start: to, end: addDays(from, 1) } }
-      : p && p in PRESETS
+      : p && (PRESET_KEYS as string[]).includes(p)
         ? { preset: p as Preset }
         : DEFAULT.period;
   const area = q.get("area");
@@ -79,8 +282,8 @@ function readUrl(search: string): State {
   return {
     period,
     filters: {
-      area: area && area in AREA ? (area as AreaKey) : "ALL",
-      view: VIEW_OPTIONS.some((v) => v.key === view) ? (view as ViewKey) : "ALL",
+      area: area === "PERSONAL" || area === "WORK" ? (area as AreaKey) : "ALL",
+      view: (VIEW_KEYS as readonly string[]).includes(view ?? "") ? (view as ViewKey) : "ALL",
       project: q.get("project") ?? "",
     },
     metric: q.get("m") === "created" ? "created" : "done",
@@ -215,18 +418,17 @@ function niceScale(max: number, count = 4) {
 
 /* ───────────────────────── period picker ───────────────────────── */
 
-const fmtMonthTitle = new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric" });
-
 function MonthGrid({ month, from, to, onPick }: { month: Date; from: Date | null; to: Date | null; onPick: (d: Date) => void }) {
+  const lang = useLang();
   const first = startOfWeek(month);
   const today = startOfDay(new Date());
   const days = Array.from({ length: 42 }, (_, i) => addDays(first, i));
   return (
     <div className="w-[238px]">
-      <p className="mb-2 text-center text-xs font-medium text-fg first-letter:uppercase">{fmtMonthTitle.format(month)}</p>
+      <p className="mb-2 text-center text-xs font-medium text-fg first-letter:uppercase">{month.toLocaleDateString(LOCALE[lang], { month: "long", year: "numeric" })}</p>
       <div className="grid grid-cols-7 gap-y-0.5 text-center text-[10px] text-faint">
-        {["L", "M", "X", "J", "V", "S", "D"].map((d) => (
-          <span key={d} className="py-1">
+        {COPY[lang].calendarDays.map((d, i) => (
+          <span key={i} className="py-1">
             {d}
           </span>
         ))}
@@ -246,7 +448,7 @@ function MonthGrid({ month, from, to, onPick }: { month: Date; from: Date | null
                     ? "bg-cyan/15 text-fg"
                     : "rounded-md text-muted hover:bg-white/10 hover:text-fg"
               } ${+d === +today && !isFrom && !isTo ? "underline decoration-cyan underline-offset-4" : ""}`}
-              aria-label={d.toLocaleDateString("es-CO")}
+              aria-label={d.toLocaleDateString(LOCALE[lang])}
             >
               {d.getDate()}
             </button>
@@ -258,6 +460,8 @@ function MonthGrid({ month, from, to, onPick }: { month: Date; from: Date | null
 }
 
 function PeriodPicker({ period, range, onChange }: { period: Period; range: Range; onChange: (p: Period) => void }) {
+  const lang = useLang();
+  const c = COPY[lang];
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(() => new Date(range.start.getFullYear(), range.start.getMonth(), 1));
   const [from, setFrom] = useState<Date | null>(range.start);
@@ -312,13 +516,13 @@ function PeriodPicker({ period, range, onChange }: { period: Period; range: Rang
         className="flex items-center gap-2 rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-fg hover:border-cyan/60"
       >
         <CalendarDays size={14} className="text-cyan" />
-        <span>{period.preset === "custom" ? "Personalizado" : PRESETS[period.preset]}</span>
-        <span className="hidden text-muted sm:inline">· {rangeLabel(range)}</span>
+        <span>{period.preset === "custom" ? c.custom : PRESETS[lang][period.preset]}</span>
+        <span className="hidden text-muted sm:inline">· {rangeLabel(range, lang)}</span>
       </button>
       {open && (
         <div className="absolute top-full left-0 z-40 mt-2 flex max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-2xl sm:flex-row">
           <ul className="grid grid-cols-2 border-b border-line p-1.5 sm:block sm:w-44 sm:border-r sm:border-b-0">
-            {(Object.keys(PRESETS) as Preset[]).map((p) => (
+            {PRESET_KEYS.map((p) => (
               <li key={p}>
                 <button
                   onClick={() => {
@@ -328,14 +532,14 @@ function PeriodPicker({ period, range, onChange }: { period: Period; range: Rang
                   className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-xs text-muted hover:bg-white/5 hover:text-fg"
                 >
                   <span className="w-4">{period.preset === p && <Check size={14} strokeWidth={3} className="text-cyan" />}</span>
-                  {PRESETS[p]}
+                  {PRESETS[lang][p]}
                 </button>
               </li>
             ))}
           </ul>
           <div className="space-y-3 p-4">
             <div className="flex items-start gap-2">
-              <button onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="mt-0.5 text-faint hover:text-fg" aria-label="Mes anterior">
+              <button onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="mt-0.5 text-faint hover:text-fg" aria-label={c.prevMonth}>
                 <ChevronLeft size={16} />
               </button>
               <div className="flex gap-5">
@@ -344,7 +548,7 @@ function PeriodPicker({ period, range, onChange }: { period: Period; range: Rang
                   <MonthGrid month={next} from={from} to={to} onPick={pick} />
                 </div>
               </div>
-              <button onClick={() => setMonth(next)} className="mt-0.5 text-faint hover:text-fg" aria-label="Mes siguiente">
+              <button onClick={() => setMonth(next)} className="mt-0.5 text-faint hover:text-fg" aria-label={c.nextMonth}>
                 <ChevronRight size={16} />
               </button>
             </div>
@@ -357,9 +561,9 @@ function PeriodPicker({ period, range, onChange }: { period: Period; range: Rang
                   if (d) setFrom(d);
                 }}
                 className="rounded-md border border-line bg-ink px-2 py-1 text-fg [color-scheme:dark]"
-                aria-label="Desde"
+                aria-label={c.from}
               />
-              <span className="text-faint">a</span>
+              <span className="text-faint">{c.rangeTo}</span>
               <input
                 type="date"
                 value={to ? isoDay(to) : ""}
@@ -368,14 +572,14 @@ function PeriodPicker({ period, range, onChange }: { period: Period; range: Rang
                   if (d) setTo(d);
                 }}
                 className="rounded-md border border-line bg-ink px-2 py-1 text-fg [color-scheme:dark]"
-                aria-label="Hasta"
+                aria-label={c.to}
               />
               <button
                 onClick={apply}
                 disabled={!from || (to !== null && to < from)}
                 className="ml-auto rounded-md bg-cyan px-3 py-1 font-medium text-ink disabled:opacity-40"
               >
-                Aplicar
+                {c.apply}
               </button>
             </div>
           </div>
@@ -388,14 +592,15 @@ function PeriodPicker({ period, range, onChange }: { period: Period; range: Rang
 /* ───────────────────────── stat tiles ───────────────────────── */
 
 function Delta({ now, before, goodWhenUp = true }: { now: number; before: number | null; goodWhenUp?: boolean }) {
+  const lang = useLang();
   if (before === null) return null;
   const diff = now - before;
-  if (diff === 0) return <span className="text-faint">igual que antes</span>;
+  if (diff === 0) return <span className="text-faint">{COPY[lang].sameAsBefore}</span>;
   const good = diff > 0 === goodWhenUp;
   const pct = before ? ` (${diff > 0 ? "+" : ""}${Math.round((diff / before) * 100)} %)` : "";
   return (
     <span className={good ? "text-[#4ade80]" : "text-[#fb7185]"}>
-      {diff > 0 ? "▲" : "▼"} {fmt.format(Math.abs(diff))}
+      {diff > 0 ? "▲" : "▼"} {NUM[lang].format(Math.abs(diff))}
       <span className="text-faint">{pct}</span>
     </span>
   );
@@ -418,6 +623,7 @@ function Tile({ label, value, hint, delta, accent }: { label: string; value: Rea
 /* ───────────────────────── charts ───────────────────────── */
 
 function ActivityChart({ buckets, onDrill }: { buckets: Bucket[]; onDrill?: (b: Bucket) => void }) {
+  const c = COPY[useLang()];
   const [ref, width] = useWidth<HTMLDivElement>();
   const tip = useTip();
   const [hover, setHover] = useState<number | null>(null);
@@ -434,7 +640,7 @@ function ActivityChart({ buckets, onDrill }: { buckets: Bucket[]; onDrill?: (b: 
   return (
     <div ref={ref} className="relative">
       {width > 0 && (
-        <svg width={width} height={H} role="img" aria-label="Terminadas y parqueadas en el tiempo" onPointerLeave={() => (setHover(null), tip.hide())}>
+        <svg width={width} height={H} role="img" aria-label={c.overTimeAria} onPointerLeave={() => (setHover(null), tip.hide())}>
           {ticks.map((t) => (
             <g key={t}>
               <line x1={m.l} x2={width - m.r} y1={y(t)} y2={y(t)} stroke={GRID} />
@@ -469,9 +675,9 @@ function ActivityChart({ buckets, onDrill }: { buckets: Bucket[]; onDrill?: (b: 
                       e,
                       <>
                         <p className="mb-1 text-[11px] text-muted first-letter:uppercase">{b.tip}</p>
-                        <TipRow color={METRIC_COLOR.done} value={b.done} label="terminadas" />
-                        <TipRow color={METRIC_COLOR.created} value={b.created} label="parqueadas" />
-                        {onDrill && <p className="mt-1 text-[10px] text-faint">Clic para ver solo este periodo</p>}
+                        <TipRow color={METRIC_COLOR.done} value={b.done} label={c.done} />
+                        <TipRow color={METRIC_COLOR.created} value={b.created} label={c.parked} />
+                        {onDrill && <p className="mt-1 text-[10px] text-faint">{c.drillTip}</p>}
                       </>,
                     );
                   }}
@@ -489,6 +695,7 @@ function ActivityChart({ buckets, onDrill }: { buckets: Bucket[]; onDrill?: (b: 
 }
 
 function OpenChart({ buckets }: { buckets: Bucket[] }) {
+  const c = COPY[useLang()];
   const [ref, width] = useWidth<HTMLDivElement>();
   const tip = useTip();
   const [hover, setHover] = useState<number | null>(null);
@@ -513,7 +720,7 @@ function OpenChart({ buckets }: { buckets: Bucket[] }) {
           width={width}
           height={H}
           role="img"
-          aria-label="Pendientes abiertas en el tiempo"
+          aria-label={c.openAria}
           onPointerMove={(e) => {
             const r = e.currentTarget.getBoundingClientRect();
             const i = Math.round(((e.clientX - r.left - m.l) / Math.max(pw, 1)) * (buckets.length - 1));
@@ -523,7 +730,7 @@ function OpenChart({ buckets }: { buckets: Bucket[] }) {
               e,
               <>
                 <p className="mb-1 text-[11px] text-muted first-letter:uppercase">{buckets[k].tip}</p>
-                <TipRow color={color} value={buckets[k].open} label="abiertas al cierre" />
+                <TipRow color={color} value={buckets[k].open} label={c.openTip} />
               </>,
             );
           }}
@@ -562,6 +769,7 @@ function OpenChart({ buckets }: { buckets: Bucket[] }) {
 }
 
 function Histogram({ bins }: { bins: { label: string; count: number }[] }) {
+  const c = COPY[useLang()];
   const [ref, width] = useWidth<HTMLDivElement>();
   const tip = useTip();
   const H = 200;
@@ -578,7 +786,7 @@ function Histogram({ bins }: { bins: { label: string; count: number }[] }) {
   return (
     <div ref={ref} className="relative">
       {width > 0 && (
-        <svg width={width} height={H} role="img" aria-label="Histograma del tiempo de cierre" onPointerLeave={tip.hide}>
+        <svg width={width} height={H} role="img" aria-label={c.leadAria} onPointerLeave={tip.hide}>
           {bins.map((b, i) => {
             const cx = m.l + i * band + band / 2;
             return (
@@ -602,8 +810,8 @@ function Histogram({ bins }: { bins: { label: string; count: number }[] }) {
                     tip.show(
                       e,
                       <>
-                        <p className="mb-1 text-[11px] text-muted">Se cerraron en {b.label}</p>
-                        <TipRow color={METRIC_COLOR.done} value={b.count} label={`tarjetas · ${total ? Math.round((b.count / total) * 100) : 0} %`} />
+                        <p className="mb-1 text-[11px] text-muted">{c.leadTip(b.label)}</p>
+                        <TipRow color={METRIC_COLOR.done} value={b.count} label={`${c.cards} · ${total ? Math.round((b.count / total) * 100) : 0} %`} />
                       </>,
                     )
                   }
@@ -627,6 +835,8 @@ const shade = (color: string, v: number, max: number) => {
 };
 
 function Heatmap({ grid, metric }: { grid: number[][]; metric: Metric }) {
+  const lang = useLang();
+  const days = weekdays(lang);
   const tip = useTip();
   const max = Math.max(...grid.flat());
   const color = METRIC_COLOR[metric];
@@ -635,7 +845,7 @@ function Heatmap({ grid, metric }: { grid: number[][]; metric: Metric }) {
       <div className="grid grid-cols-[28px_repeat(24,minmax(0,1fr))] gap-[2px] text-[9px] text-faint" onPointerLeave={tip.hide}>
         {grid.map((row, d) => (
           <div key={d} className="contents">
-            <span className="self-center">{WEEKDAYS[d]}</span>
+            <span className="self-center">{days[d]}</span>
             {row.map((v, h) => (
               <span
                 key={h}
@@ -646,9 +856,9 @@ function Heatmap({ grid, metric }: { grid: number[][]; metric: Metric }) {
                     e,
                     <>
                       <p className="mb-1 text-[11px] text-muted">
-                        {WEEKDAYS[d]} · {h}:00 – {h + 1}:00
+                        {days[d]} · {h}:00 – {h + 1}:00
                       </p>
-                      <TipRow color={color} value={v} label={METRIC[metric].toLowerCase()} />
+                      <TipRow color={color} value={v} label={METRIC[lang][metric].toLowerCase()} />
                     </>,
                   )
                 }
@@ -670,22 +880,24 @@ function Heatmap({ grid, metric }: { grid: number[][]; metric: Metric }) {
 }
 
 function Scale({ color }: { color: string }) {
+  const c = COPY[useLang()];
   return (
     <div className="mt-3 flex items-center justify-end gap-1 text-[10px] text-faint">
-      menos
+      {c.less}
       {[0, 1, 2, 3, 4].map((i) => (
         <span key={i} className="h-2.5 w-2.5 rounded-[3px]" style={{ background: shade(color, i, 4) }} />
       ))}
-      más
+      {c.more}
     </div>
   );
 }
 
-const fmtMonthShort = new Intl.DateTimeFormat("es-CO", { month: "short" });
-const fmtLongDay = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-
 /** A year of days, GitHub style, ending with the week of `end`. */
 function YearCalendar({ days, end, range, metric, onPick }: { days: Map<string, number>; end: Date; range: Range; metric: Metric; onPick: (d: Date) => void }) {
+  const lang = useLang();
+  const c = COPY[lang];
+  const monthShort = new Intl.DateTimeFormat(LOCALE[lang], { month: "short" });
+  const longDay = new Intl.DateTimeFormat(LOCALE[lang], { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const tip = useTip();
   const last = startOfWeek(end);
   const first = addDays(last, -52 * 7);
@@ -699,14 +911,17 @@ function YearCalendar({ days, end, range, metric, onPick }: { days: Map<string, 
   return (
     <div className="relative">
       <p className="mb-3 text-xs text-muted">
-        <span className="font-semibold text-fg">{fmt.format(total)}</span> {METRIC[metric].toLowerCase()} en el último año ·{" "}
-        <span className="font-semibold text-fg">{active}</span> días con actividad
+        {c.yearSummary(
+          <span className="font-semibold text-fg">{NUM[lang].format(total)}</span>,
+          METRIC[lang][metric].toLowerCase(),
+          <span className="font-semibold text-fg">{active}</span>,
+        )}
       </p>
       <div className="overflow-x-auto pb-1">
         <div className="inline-flex gap-[3px]" onPointerLeave={tip.hide}>
           <div className="mr-1 grid grid-rows-[14px_repeat(7,11px)] gap-[3px] text-[9px] text-faint">
             <span />
-            {WEEKDAYS.map((d, i) => (
+            {weekdays(lang).map((d, i) => (
               <span key={d} className="leading-[11px]">
                 {i % 2 === 0 ? d : ""}
               </span>
@@ -715,7 +930,7 @@ function YearCalendar({ days, end, range, metric, onPick }: { days: Map<string, 
           {weeks.map((week, w) => (
             <div key={w} className="grid grid-rows-[14px_repeat(7,11px)] gap-[3px]">
               <span className="text-[9px] whitespace-nowrap text-faint">
-                {week[0].getDate() <= 7 || w === 0 ? fmtMonthShort.format(week[0]) : ""}
+                {week[0].getDate() <= 7 || w === 0 ? monthShort.format(week[0]) : ""}
               </span>
               {week.map((d) => {
                 if (d > end) return <span key={+d} />;
@@ -725,15 +940,15 @@ function YearCalendar({ days, end, range, metric, onPick }: { days: Map<string, 
                   <button
                     key={+d}
                     onClick={() => onPick(d)}
-                    aria-label={`${fmtLongDay.format(d)}: ${v}`}
+                    aria-label={`${longDay.format(d)}: ${v}`}
                     className={`h-[11px] w-[11px] rounded-[3px] hover:outline hover:outline-1 hover:outline-fg/70 ${inside ? "" : "opacity-45"}`}
                     style={{ background: shade(color, v, max) }}
                     onPointerMove={(e) =>
                       tip.show(
                         e,
                         <>
-                          <p className="mb-1 text-[11px] text-muted first-letter:uppercase">{fmtLongDay.format(d)}</p>
-                          <TipRow color={color} value={v} label={METRIC[metric].toLowerCase()} />
+                          <p className="mb-1 text-[11px] text-muted first-letter:uppercase">{longDay.format(d)}</p>
+                          <TipRow color={color} value={v} label={METRIC[lang][metric].toLowerCase()} />
                         </>,
                       )
                     }
@@ -745,7 +960,7 @@ function YearCalendar({ days, end, range, metric, onPick }: { days: Map<string, 
         </div>
       </div>
       <div className="flex items-center justify-between">
-        <p className="mt-3 text-[10px] text-faint">Lo que queda fuera del periodo se ve atenuado. Clic en un día para verlo.</p>
+        <p className="mt-3 text-[10px] text-faint">{c.yearHint}</p>
         <Scale color={color} />
       </div>
       {tip.node}
@@ -753,10 +968,11 @@ function YearCalendar({ days, end, range, metric, onPick }: { days: Map<string, 
   );
 }
 
-function Bars({ rows, color, empty = "Nada en este periodo." }: { rows: Row[]; color: string; empty?: string }) {
+function Bars({ rows, color, empty }: { rows: Row[]; color: string; empty?: string }) {
+  const c = COPY[useLang()];
   const max = Math.max(1, ...rows.map((r) => r.count));
   const total = rows.reduce((s, r) => s + r.count, 0);
-  if (!rows.length) return <p className="text-xs text-faint">{empty}</p>;
+  if (!rows.length) return <p className="text-xs text-faint">{empty ?? c.empty}</p>;
   return (
     <ul className="space-y-2.5">
       {rows.map((r) => (
@@ -778,30 +994,32 @@ function Bars({ rows, color, empty = "Nada en este periodo." }: { rows: Row[]; c
 }
 
 function ProjectTable({ rows, onPick }: { rows: ReturnType<typeof byProject>; onPick: (key: string) => void }) {
+  const lang = useLang();
+  const c = COPY[lang];
   const tip = useTip();
   const max = Math.max(1, ...rows.map((r) => Math.max(r.done, r.created)));
-  if (!rows.length) return <p className="text-xs text-faint">Ningún proyecto tuvo movimiento en este periodo.</p>;
+  if (!rows.length) return <p className="text-xs text-faint">{c.noProjects}</p>;
   return (
     <div className="relative -mx-1 overflow-x-auto">
       <table className="w-full min-w-[460px] text-xs">
         <thead>
           <tr className="text-left text-[10px] tracking-wide text-faint uppercase">
-            <th className="px-1 pb-2 font-normal">Proyecto</th>
-            <th className="w-[38%] px-1 pb-2 font-normal">Actividad</th>
-            <th className="px-1 pb-2 text-right font-normal">Hechas</th>
-            <th className="px-1 pb-2 text-right font-normal">Nuevas</th>
-            <th className="px-1 pb-2 text-right font-normal">Abiertas</th>
-            <th className="hidden px-1 pb-2 text-right font-normal sm:table-cell">Último mov.</th>
+            <th className="px-1 pb-2 font-normal">{c.cols.project}</th>
+            <th className="w-[38%] px-1 pb-2 font-normal">{c.cols.activity}</th>
+            <th className="px-1 pb-2 text-right font-normal">{c.cols.done}</th>
+            <th className="px-1 pb-2 text-right font-normal">{c.cols.created}</th>
+            <th className="px-1 pb-2 text-right font-normal">{c.cols.open}</th>
+            <th className="hidden px-1 pb-2 text-right font-normal sm:table-cell">{c.cols.last}</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
             <tr key={r.key} className="group border-t border-line/60">
               <td className="max-w-[180px] px-1 py-2">
-                <button onClick={() => onPick(r.key)} className="flex max-w-full items-center gap-2 text-left hover:text-cyan" title="Filtrar por este proyecto">
+                <button onClick={() => onPick(r.key)} className="flex max-w-full items-center gap-2 text-left hover:text-cyan" title={c.filterProject}>
                   <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: r.color }} />
                   <span className="truncate text-fg group-hover:text-cyan">{r.name}</span>
-                  {r.closed && <span className="shrink-0 rounded border border-line px-1 text-[9px] text-faint">cerrado</span>}
+                  {r.closed && <span className="shrink-0 rounded border border-line px-1 text-[9px] text-faint">{c.closed}</span>}
                 </button>
               </td>
               <td className="px-1 py-2" onPointerLeave={tip.hide}>
@@ -814,8 +1032,8 @@ function ProjectTable({ rows, onPick }: { rows: ReturnType<typeof byProject>; on
                       e,
                       <>
                         <p className="mb-1 text-[11px] text-muted">{r.name}</p>
-                        <TipRow color={METRIC_COLOR.done} value={r.done} label="terminadas" />
-                        <TipRow color={METRIC_COLOR.created} value={r.created} label="parqueadas" />
+                        <TipRow color={METRIC_COLOR.done} value={r.done} label={c.done} />
+                        <TipRow color={METRIC_COLOR.created} value={r.created} label={c.parked} />
                       </>,
                     )
                   }
@@ -827,7 +1045,7 @@ function ProjectTable({ rows, onPick }: { rows: ReturnType<typeof byProject>; on
               <td className="px-1 py-2 text-right font-semibold text-fg tabular-nums">{r.done}</td>
               <td className="px-1 py-2 text-right text-muted tabular-nums">{r.created}</td>
               <td className="px-1 py-2 text-right text-muted tabular-nums">{r.open}</td>
-              <td className="hidden px-1 py-2 text-right text-faint sm:table-cell">{r.lastAt ? ago(r.lastAt.toISOString()) : "—"}</td>
+              <td className="hidden px-1 py-2 text-right text-faint sm:table-cell">{r.lastAt ? ago(r.lastAt.toISOString(), lang) : "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -837,10 +1055,11 @@ function ProjectTable({ rows, onPick }: { rows: ReturnType<typeof byProject>; on
   );
 }
 
-const fmtTime = new Intl.DateTimeFormat("es-CO", { hour: "numeric", minute: "2-digit" });
-const fmtLogDay = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long" });
-
 function Log({ evts, projects }: { evts: Event[]; projects: Map<string, ProjectDTO> }) {
+  const lang = useLang();
+  const c = COPY[lang];
+  const fmtTime = new Intl.DateTimeFormat(LOCALE[lang], { hour: "numeric", minute: "2-digit" });
+  const fmtLogDay = new Intl.DateTimeFormat(LOCALE[lang], { weekday: "long", day: "numeric", month: "long" });
   const [limit, setLimit] = useState(60);
   const shown = [...evts].reverse().slice(0, limit);
   const groups = new Map<string, Event[]>();
@@ -848,24 +1067,25 @@ function Log({ evts, projects }: { evts: Event[]; projects: Map<string, ProjectD
     const k = isoDay(e.at);
     groups.set(k, [...(groups.get(k) ?? []), e]);
   }
-  if (!evts.length) return <p className="text-xs text-faint">Sin movimiento en este periodo.</p>;
+  if (!evts.length) return <p className="text-xs text-faint">{c.logEmpty}</p>;
   return (
     <div className="space-y-4">
       {[...groups].map(([day, items]) => (
         <section key={day}>
           <h3 className="mb-1.5 text-[11px] text-faint first-letter:uppercase">
-            {fmtLogDay.format(parseDay(day)!)} · {items.filter((e) => e.metric === "done").length} hechas, {items.filter((e) => e.metric === "created").length} nuevas
+            {fmtLogDay.format(parseDay(day)!)} ·{" "}
+            {c.logDay(items.filter((e) => e.metric === "done").length, items.filter((e) => e.metric === "created").length)}
           </h3>
           <ul className="space-y-1">
             {items.map((e) => {
-              const g = groupOf(e.card, projects);
+              const g = groupOf(e.card, projects, lang);
               const lead = e.metric === "done" ? leadHours(e.card) : null;
               return (
                 <li key={`${e.card.id}-${e.metric}`} className="flex items-start gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-raised">
                   {e.metric === "done" ? (
-                    <CircleCheck size={14} className="mt-px shrink-0" style={{ color: METRIC_COLOR.done }} aria-label="Terminada" />
+                    <CircleCheck size={14} className="mt-px shrink-0" style={{ color: METRIC_COLOR.done }} aria-label={c.doneOne} />
                   ) : (
-                    <Plus size={14} className="mt-px shrink-0" style={{ color: METRIC_COLOR.created }} aria-label="Parqueada" />
+                    <Plus size={14} className="mt-px shrink-0" style={{ color: METRIC_COLOR.created }} aria-label={c.parkedOne} />
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="leading-snug text-fg">
@@ -876,7 +1096,7 @@ function Log({ evts, projects }: { evts: Event[]; projects: Map<string, ProjectD
                         <span className="h-1.5 w-1.5 rounded-full" style={{ background: g.color }} />
                         {g.name}
                       </span>
-                      {lead !== null && <span>tomó {durationLabel(lead)}</span>}
+                      {lead !== null && <span>{c.took(durationLabel(lead, lang))}</span>}
                     </p>
                   </div>
                   <span className="shrink-0 font-mono text-[10.5px] text-faint">{fmtTime.format(e.at)}</span>
@@ -888,7 +1108,7 @@ function Log({ evts, projects }: { evts: Event[]; projects: Map<string, ProjectD
       ))}
       {evts.length > limit && (
         <button onClick={() => setLimit(limit + 100)} className="w-full rounded-lg border border-line py-2 text-xs text-muted hover:bg-raised hover:text-fg">
-          Mostrar más ({evts.length - limit} restantes)
+          {c.showMore(evts.length - limit)}
         </button>
       )}
     </div>
@@ -899,18 +1119,22 @@ function Log({ evts, projects }: { evts: Event[]; projects: Map<string, ProjectD
 
 /** What Parkboard Autopilot is doing: how many cards in each state and each one with its PR and last note. */
 function AutopilotPanel({ rows }: { rows: AutopilotRow[] }) {
+  const lang = useLang();
+  const c = COPY[lang];
+  // Color from lib/autopilot; label and hint in the viewer's language.
+  const stateMeta = (s: AutopilotState) => ({ ...AUTOPILOT_STATE[s], ...c.autopilotState?.[s] });
   const [only, setOnly] = useState<AutopilotState | null>(null);
   const count = (s: AutopilotState) => rows.filter((r) => r.state === s).length;
   const shown = only ? rows.filter((r) => r.state === only) : rows;
   return (
     <Card
       title="Autopilot"
-      sub="Tarjetas que Claude toma solo: las que tienen la etiqueta auto y lo que hizo con ellas. Estado actual, no depende del periodo."
+      sub={c.autopilotSub}
       right={<Bot size={16} className="text-faint" />}
     >
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
         {(Object.keys(AUTOPILOT_STATE) as AutopilotState[]).map((s) => {
-          const meta = AUTOPILOT_STATE[s];
+          const meta = stateMeta(s);
           const active = only === s;
           return (
             <button
@@ -931,7 +1155,7 @@ function AutopilotPanel({ rows }: { rows: AutopilotRow[] }) {
       {shown.length ? (
         <ul className="divide-y divide-line">
           {shown.map(({ card, state, pr, note }) => {
-            const meta = AUTOPILOT_STATE[state];
+            const meta = stateMeta(state);
             return (
               <li key={card.id} className="py-2.5 text-xs">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -948,7 +1172,7 @@ function AutopilotPanel({ rows }: { rows: AutopilotRow[] }) {
                       PR <ExternalLink size={11} />
                     </a>
                   )}
-                  <span className="text-[10.5px] text-faint">{ago(card.updatedAt)}</span>
+                  <span className="text-[10.5px] text-faint">{ago(card.updatedAt, lang)}</span>
                 </div>
                 {note && state !== "queued" && <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted">{note.text}</p>}
               </li>
@@ -957,7 +1181,7 @@ function AutopilotPanel({ rows }: { rows: AutopilotRow[] }) {
         </ul>
       ) : (
         <p className="text-xs text-faint">
-          {rows.length ? "Ninguna tarjeta en este estado." : "Ninguna tarjeta tiene la etiqueta auto todavía. Ponla en una task o bug con repo para que Autopilot la tome."}
+          {rows.length ? c.autopilotNone : c.autopilotEmpty}
         </p>
       )}
     </Card>
@@ -965,6 +1189,9 @@ function AutopilotPanel({ rows }: { rows: AutopilotRow[] }) {
 }
 
 export function Dashboard({ cards, projects }: { cards: CardDTO[]; projects: ProjectDTO[] }) {
+  const lang = useLang();
+  const c = COPY[lang];
+  const fmt = NUM[lang];
   const autopilot = useMemo(() => autopilotRows(cards), [cards]);
   // Dates are cut in the viewer's time zone, which the server does not know: render after mount.
   const [now, setNow] = useState<Date | null>(null);
@@ -1004,7 +1231,7 @@ export function Dashboard({ cards, projects }: { cards: CardDTO[]; projects: Pro
     const metricDays = perDay(all.filter((e) => e.metric === metric));
     const span = daysBetween(range.start, range.end);
     const activeDays = new Set(evts.map((e) => isoDay(e.at))).size;
-    const projectRows = byProject(scoped, byId, range);
+    const projectRows = byProject(scoped, byId, range, lang);
     const grid = weekHourGrid(metricEvts);
     const peak = (() => {
       let best = { d: 0, h: 0, v: 0 };
@@ -1022,14 +1249,14 @@ export function Dashboard({ cards, projects }: { cards: CardDTO[]; projects: Pro
       done,
       created,
       unit,
-      buckets: series(scoped, range, unit),
+      buckets: series(scoped, range, unit, lang),
       doneN: done.length,
       createdN: created.length,
       prevDone: count(before, "done"),
       prevCreated: count(before, "created"),
       median: median(leads),
       prevMedian: median(prevLeads),
-      bins: leadHistogram(done.map((e) => e.card)),
+      bins: leadHistogram(done.map((e) => e.card), lang),
       projectRows,
       liveProjects: projects.filter((p) => filters.area === "ALL" || p.area === filters.area).length,
       grid,
@@ -1045,51 +1272,62 @@ export function Dashboard({ cards, projects }: { cards: CardDTO[]; projects: Pro
       urgent: open.filter((c) => c.priority === "URGENT" || c.priority === "HIGH").length,
       oldest,
     };
-  }, [now, state, cards, byId, first, projects]);
+  }, [now, state, cards, byId, first, projects, lang]);
 
   const drill = (b: Bucket) => update({ period: { preset: "custom", range: { start: b.start, end: b.end } } });
   const pickDay = (d: Date) => update({ period: { preset: "custom", range: { start: d, end: addDays(d, 1) } } });
 
   const groups = useMemo(() => {
     const seen = new Map<string, string>();
-    for (const c of cards) {
-      const g = groupOf(c, byId);
-      if (!seen.has(g.key)) seen.set(g.key, g.closed ? `${g.name} (cerrado)` : g.name);
+    for (const card of cards) {
+      const g = groupOf(card, byId, lang);
+      if (!seen.has(g.key)) seen.set(g.key, g.closed ? `${g.name}${c.closedSuffix}` : g.name);
     }
     return [...seen].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [cards, byId]);
+  }, [cards, byId, lang, c.closedSuffix]);
+  const { AREA } = labels(lang);
+  const metricName = METRIC[lang][state.metric];
+  const metricOptions = [
+    { key: "done" as const, label: METRIC[lang].done },
+    { key: "created" as const, label: METRIC[lang].created },
+  ];
+  const legend = [
+    { label: METRIC[lang].done, color: METRIC_COLOR.done },
+    { label: METRIC[lang].created, color: METRIC_COLOR.created },
+  ];
 
   return (
     <div className="min-h-full bg-ink">
       <header className="z-30 sm:sticky sm:top-0 border-b border-line bg-ink/90 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-2 px-4 py-3">
           <Link href="/" className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-muted hover:bg-raised hover:text-fg">
-            <ArrowLeft size={14} /> Tablero
+            <ArrowLeft size={14} /> {c.board}
           </Link>
+          <LangSwitch className="order-last ml-auto" />
           <h1 className="pr-2 text-lg font-semibold tracking-tight">
-            <span className="text-gradient">Actividad</span>
+            <span className="text-gradient">{c.title}</span>
           </h1>
           {view && (
             <>
               <PeriodPicker period={state.period} range={view.range} onChange={(period) => update({ period })} />
               <Segmented
-                label="Área"
+                label={c.area}
                 value={state.filters.area}
                 options={[
-                  { key: "ALL", label: "Todo" },
+                  { key: "ALL", label: c.all },
                   { key: "PERSONAL", label: AREA.PERSONAL },
                   { key: "WORK", label: AREA.WORK },
                 ]}
                 onChange={(area) => update({ filters: { ...state.filters, area } })}
               />
-              <Segmented label="Vista" value={state.filters.view} options={VIEW_OPTIONS} onChange={(v) => update({ filters: { ...state.filters, view: v } })} />
+              <Segmented label={c.view} value={state.filters.view} options={viewOptions(lang)} onChange={(v) => update({ filters: { ...state.filters, view: v } })} />
               <select
                 value={state.filters.project}
                 onChange={(e) => update({ filters: { ...state.filters, project: e.target.value } })}
                 className="max-w-[180px] rounded-lg border border-line bg-panel px-2 py-1.5 text-xs text-muted outline-none"
-                aria-label="Proyecto"
+                aria-label={c.project}
               >
-                <option value="">Todos los proyectos</option>
+                <option value="">{c.allProjects}</option>
                 {groups.map(([key, name]) => (
                   <option key={key} value={key}>
                     {name}
@@ -1098,7 +1336,7 @@ export function Dashboard({ cards, projects }: { cards: CardDTO[]; projects: Pro
               </select>
               {(state.filters.area !== "ALL" || state.filters.view !== "ALL" || state.filters.project) && (
                 <button onClick={() => update({ filters: NO_FILTERS })} className="text-xs text-faint hover:text-fg">
-                  Quitar filtros
+                  {c.clearFilters}
                 </button>
               )}
             </>
@@ -1107,45 +1345,50 @@ export function Dashboard({ cards, projects }: { cards: CardDTO[]; projects: Pro
       </header>
 
       {!view ? (
-        <p className="p-8 text-sm text-faint">Cargando…</p>
+        <p className="p-8 text-sm text-faint">{c.loading}</p>
       ) : (
         <main className="mx-auto max-w-7xl space-y-4 px-4 py-5">
           <p className="text-xs text-muted">
-            <span className="text-fg first-letter:uppercase">{rangeLabel(view.range)}</span>
-            {view.prev && <> · comparado con {rangeLabel(view.prev)}</>}
+            <span className="text-fg first-letter:uppercase">{rangeLabel(view.range, lang)}</span>
+            {view.prev && (
+              <>
+                {" "}
+                · {c.comparedWith} {rangeLabel(view.prev, lang)}
+              </>
+            )}
           </p>
 
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-            <Tile label="Terminadas" accent={METRIC_COLOR.done} value={fmt.format(view.doneN)} delta={<Delta now={view.doneN} before={view.prevDone} />} />
-            <Tile label="Parqueadas" accent={METRIC_COLOR.created} value={fmt.format(view.createdN)} delta={<Delta now={view.createdN} before={view.prevCreated} goodWhenUp={false} />} />
+            <Tile label={METRIC[lang].done} accent={METRIC_COLOR.done} value={fmt.format(view.doneN)} delta={<Delta now={view.doneN} before={view.prevDone} />} />
+            <Tile label={METRIC[lang].created} accent={METRIC_COLOR.created} value={fmt.format(view.createdN)} delta={<Delta now={view.createdN} before={view.prevCreated} goodWhenUp={false} />} />
             <Tile
-              label="Balance"
+              label={c.balance}
               value={`${view.doneN - view.createdN > 0 ? "+" : ""}${fmt.format(view.doneN - view.createdN)}`}
-              hint={view.doneN >= view.createdN ? "cerraste más de lo que entró" : "entró más de lo que cerraste"}
+              hint={view.doneN >= view.createdN ? c.balanceUp : c.balanceDown}
             />
             <Tile
-              label="Proyectos con actividad"
+              label={c.activeProjects}
               value={view.projectRows.length}
-              hint={`${view.liveProjects} proyectos abiertos en el tablero`}
+              hint={c.liveProjects(view.liveProjects)}
             />
             <Tile
-              label="Tiempo típico de cierre"
-              value={durationLabel(view.median)}
-              hint={view.prevMedian !== null ? `antes ${durationLabel(view.prevMedian)} · mediana` : "mediana de lo terminado"}
+              label={c.leadTime}
+              value={durationLabel(view.median, lang)}
+              hint={view.prevMedian !== null ? c.leadBefore(durationLabel(view.prevMedian, lang)) : c.leadMedian}
             />
             <Tile
-              label="Racha"
-              value={`${view.streak} ${view.streak === 1 ? "día" : "días"}`}
-              hint={`récord ${view.longest} · activo ${view.activeDays}/${view.span} días`}
+              label={c.streak}
+              value={c.days(view.streak)}
+              hint={c.streakHint(view.longest, view.activeDays, view.span)}
             />
           </div>
 
           <AutopilotPanel rows={autopilot} />
 
           <Card
-            title="Actividad en el tiempo"
-            sub={`Por ${{ hour: "hora", day: "día", week: "semana", month: "mes" }[view.unit]}. ${view.unit !== "hour" ? "Clic en una columna para verla sola." : ""}`}
-            right={<Legend items={[{ label: "Terminadas", color: METRIC_COLOR.done }, { label: "Parqueadas", color: METRIC_COLOR.created }]} />}
+            title={c.overTime}
+            sub={`${c.per[view.unit]} ${view.unit !== "hour" ? c.drillHint : ""}`}
+            right={<Legend items={legend} />}
           >
             <ActivityChart buckets={view.buckets} onDrill={view.unit === "hour" ? undefined : drill} />
           </Card>
@@ -1153,37 +1396,33 @@ export function Dashboard({ cards, projects }: { cards: CardDTO[]; projects: Pro
           <div className="grid gap-4 lg:grid-cols-3">
             <Card
               className="lg:col-span-2"
-              title="Por proyecto"
-              sub={`${view.projectRows.length} con movimiento · clic en uno para filtrar`}
-              right={<Legend items={[{ label: "Terminadas", color: METRIC_COLOR.done }, { label: "Parqueadas", color: METRIC_COLOR.created }]} />}
+              title={c.byProject}
+              sub={c.byProjectSub(view.projectRows.length)}
+              right={<Legend items={legend} />}
             >
               <ProjectTable rows={view.projectRows} onPick={(key) => update({ filters: { ...state.filters, project: key } })} />
             </Card>
-            <Card title="Cuánto tardas en cerrar" sub={view.done.length ? `De parqueada a terminada · mediana ${durationLabel(view.median)}` : "Sin tarjetas terminadas en el periodo"}>
+            <Card title={c.leadTitle} sub={view.done.length ? c.leadSub(durationLabel(view.median, lang)) : c.leadEmpty}>
               <Histogram bins={view.bins} />
             </Card>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card title="Pendientes abiertas" sub={`Hoy hay ${view.open.length} abiertas · ${view.urgent} urgentes o altas`}>
+            <Card title={c.openTitle} sub={c.openSub(view.open.length, view.urgent)}>
               <OpenChart buckets={view.buckets} />
             </Card>
             <Card
-              title="Cuándo trabajas"
-              sub={
-                view.peak
-                  ? `Más ${METRIC[state.metric].toLowerCase()} los ${WEEKDAYS[view.bestDay!].toLowerCase()} · hora pico ${view.peak.h}:00`
-                  : "Sin datos en el periodo"
-              }
-              right={<Segmented label="Medir" value={state.metric} options={[{ key: "done", label: "Terminadas" }, { key: "created", label: "Parqueadas" }]} onChange={(metric) => update({ metric })} />}
+              title={c.whenTitle}
+              sub={view.peak ? c.whenSub(metricName.toLowerCase(), view.bestDay!, view.peak.h) : c.noData}
+              right={<Segmented label={c.measure} value={state.metric} options={metricOptions} onChange={(metric) => update({ metric })} />}
             >
               <Heatmap grid={view.grid} metric={state.metric} />
             </Card>
           </div>
 
           <Card
-            title="Tu año"
-            right={<Segmented label="Medir" value={state.metric} options={[{ key: "done", label: "Terminadas" }, { key: "created", label: "Parqueadas" }]} onChange={(metric) => update({ metric })} />}
+            title={c.year}
+            right={<Segmented label={c.measure} value={state.metric} options={metricOptions} onChange={(metric) => update({ metric })} />}
           >
             <YearCalendar
               days={view.metricDays}
@@ -1195,45 +1434,45 @@ export function Dashboard({ cards, projects }: { cards: CardDTO[]; projects: Pro
           </Card>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Card title="Por tipo" sub={`${METRIC[state.metric]} en el periodo`}>
-              <Bars rows={byKind(view.metricCards)} color={METRIC_COLOR[state.metric]} />
+            <Card title={c.byKind} sub={c.inPeriod(metricName)}>
+              <Bars rows={byKind(view.metricCards, lang)} color={METRIC_COLOR[state.metric]} />
             </Card>
-            <Card title="Por prioridad" sub={`${METRIC[state.metric]} en el periodo`}>
-              <Bars rows={byPriority(view.metricCards).map((r) => ({ ...r, color: PRIORITY[r.key as keyof typeof PRIORITY].color }))} color={METRIC_COLOR[state.metric]} />
+            <Card title={c.byPriority} sub={c.inPeriod(metricName)}>
+              <Bars rows={byPriority(view.metricCards, lang)} color={METRIC_COLOR[state.metric]} />
             </Card>
-            <Card title="Por área" sub={`${METRIC[state.metric]} en el periodo`}>
-              <Bars rows={byArea(view.metricCards, byId)} color={METRIC_COLOR[state.metric]} />
+            <Card title={c.byArea} sub={c.inPeriod(metricName)}>
+              <Bars rows={byArea(view.metricCards, byId, lang)} color={METRIC_COLOR[state.metric]} />
             </Card>
-            <Card title="Quién la parqueó" sub={`${METRIC[state.metric]} en el periodo`}>
+            <Card title={c.byOrigin} sub={c.inPeriod(metricName)}>
               <Bars rows={byOrigin(view.metricCards)} color={METRIC_COLOR[state.metric]} />
             </Card>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-3">
-            <Card className="lg:col-span-2" title="Bitácora" sub={`${view.evts.length} movimientos en el periodo, lo más reciente arriba`}>
+            <Card className="lg:col-span-2" title={c.log} sub={c.logSub(view.evts.length)}>
               <Log evts={view.evts} projects={byId} />
             </Card>
-            <Card title="Lo que más lleva esperando" sub="Pendientes abiertas más antiguas">
+            <Card title={c.oldest} sub={c.oldestSub}>
               {view.oldest.length ? (
                 <ul className="space-y-2">
-                  {view.oldest.map((c) => {
-                    const g = groupOf(c, byId);
+                  {view.oldest.map((card) => {
+                    const g = groupOf(card, byId, lang);
                     return (
-                      <li key={c.id} className="rounded-lg border border-line px-3 py-2 text-xs">
+                      <li key={card.id} className="rounded-lg border border-line px-3 py-2 text-xs">
                         <p className="leading-snug text-fg">
-                          <span className="font-mono text-faint">#{c.number}</span> {c.title}
+                          <span className="font-mono text-faint">#{card.number}</span> {card.title}
                         </p>
                         <p className="mt-1 flex items-center gap-2 text-[10.5px] text-faint">
                           <span className="h-1.5 w-1.5 rounded-full" style={{ background: g.color }} />
                           {g.name}
-                          <span className="ml-auto">{ago(c.createdAt).replace("hace ", "")}</span>
+                          <span className="ml-auto">{ago(card.createdAt, lang).replace(/^hace | ago$/g, "")}</span>
                         </p>
                       </li>
                     );
                   })}
                 </ul>
               ) : (
-                <p className="text-xs text-faint">No hay pendientes abiertas.</p>
+                <p className="text-xs text-faint">{c.noOpen}</p>
               )}
             </Card>
           </div>

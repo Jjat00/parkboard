@@ -1,4 +1,5 @@
-import { AREA, KIND, PRIORITY, VIEWS, viewOf, type AreaKey, type ViewKey } from "./labels";
+import { labels, VIEW_KEYS, viewOf, type AreaKey, type PriorityKey, type ViewKey } from "./labels";
+import { LOCALE, type Lang } from "./lang-shared";
 import { AGENT_LABEL } from "./session";
 import type { CardDTO, ProjectDTO } from "./types";
 
@@ -8,10 +9,15 @@ import type { CardDTO, ProjectDTO } from "./types";
  *
  * Two events per card: it was parked (createdAt) and, if it is done, it was finished (doneAt).
  * A reopened card loses its doneAt, and a deleted card leaves no trace.
+ *
+ * Functions that produce display text take the viewer's language.
  */
 
 export type Metric = "done" | "created";
-export const METRIC: Record<Metric, string> = { done: "Terminadas", created: "Parqueadas" };
+export const METRIC: Record<Lang, Record<Metric, string>> = {
+  es: { done: "Terminadas", created: "Parqueadas" },
+  en: { done: "Done", created: "Parked" },
+};
 /** Validated for the dark surface (see the dataviz palette check): cyan and violet, CVD-safe. */
 export const METRIC_COLOR: Record<Metric, string> = { done: "#35a2c8", created: "#7f6fe8" };
 
@@ -39,20 +45,37 @@ export function parseDay(s: string | null | undefined): Date | null {
 export type Range = { start: Date; end: Date };
 
 export const PRESETS = {
-  today: "Hoy",
-  yesterday: "Ayer",
-  thisWeek: "Esta semana",
-  lastWeek: "Semana anterior",
-  last7: "Últimos 7 días",
-  last30: "Últimos 30 días",
-  thisMonth: "Este mes",
-  lastMonth: "Mes anterior",
-  last90: "Últimos 90 días",
-  thisYear: "Este año",
-  lastYear: "Año anterior",
-  all: "Todo",
+  es: {
+    today: "Hoy",
+    yesterday: "Ayer",
+    thisWeek: "Esta semana",
+    lastWeek: "Semana anterior",
+    last7: "Últimos 7 días",
+    last30: "Últimos 30 días",
+    thisMonth: "Este mes",
+    lastMonth: "Mes anterior",
+    last90: "Últimos 90 días",
+    thisYear: "Este año",
+    lastYear: "Año anterior",
+    all: "Todo",
+  },
+  en: {
+    today: "Today",
+    yesterday: "Yesterday",
+    thisWeek: "This week",
+    lastWeek: "Last week",
+    last7: "Last 7 days",
+    last30: "Last 30 days",
+    thisMonth: "This month",
+    lastMonth: "Last month",
+    last90: "Last 90 days",
+    thisYear: "This year",
+    lastYear: "Last year",
+    all: "All time",
+  },
 } as const;
-export type Preset = keyof typeof PRESETS;
+export type Preset = keyof typeof PRESETS.es;
+export const PRESET_KEYS = Object.keys(PRESETS.es) as Preset[];
 
 /** A preset or a custom range picked on the calendar. */
 export type Period = { preset: Preset } | { preset: "custom"; range: Range };
@@ -121,11 +144,22 @@ export function previousRange(p: Period, r: Range): Range | null {
   }
 }
 
-const fmtDay = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short" });
-const fmtDayYear = new Intl.DateTimeFormat("es-CO", { day: "numeric", month: "short", year: "numeric" });
+/** Date formats per language, built once each. */
+const formats = (lang: Lang) => {
+  const f = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(LOCALE[lang], o);
+  return {
+    day: f({ day: "numeric", month: "short" }),
+    dayYear: f({ day: "numeric", month: "short", year: "numeric" }),
+    weekday: f({ weekday: "short", day: "numeric", month: "short" }),
+    month: f({ month: "short", year: "2-digit" }),
+    monthLong: f({ month: "long", year: "numeric" }),
+  };
+};
+const FMT = { es: formats("es"), en: formats("en") };
 
-/** "1 oct – 15 oct 2026", or a single day. */
-export function rangeLabel(r: Range) {
+/** "1 oct – 15 oct 2026" ("Oct 1 – Oct 15, 2026"), or a single day. */
+export function rangeLabel(r: Range, lang: Lang) {
+  const { day: fmtDay, dayYear: fmtDayYear } = FMT[lang];
   const last = addDays(r.end, -1);
   if (daysBetween(r.start, last) === 0) return fmtDayYear.format(r.start);
   const sameYear = r.start.getFullYear() === last.getFullYear();
@@ -135,10 +169,10 @@ export function rangeLabel(r: Range) {
 /* ───────────────────────── who a card belongs to ───────────────────────── */
 
 export type Group = { key: string; name: string; color: string; closed: boolean };
-export const LOOSE: Group = { key: "loose", name: "Ideas sueltas", color: "#666666", closed: false };
+const LOOSE_NAME: Record<Lang, string> = { es: "Ideas sueltas", en: "Loose ideas" };
 
 /** A card's project: the live one, the one it was in when that was deleted, or none. */
-export function groupOf(card: CardDTO, projects: Map<string, ProjectDTO>): Group {
+export function groupOf(card: CardDTO, projects: Map<string, ProjectDTO>, lang: Lang): Group {
   const p = card.projectId ? projects.get(card.projectId) : undefined;
   if (p) return { key: p.id, name: p.name, color: p.color, closed: false };
   if (card.formerProject) {
@@ -147,7 +181,7 @@ export function groupOf(card: CardDTO, projects: Map<string, ProjectDTO>): Group
     if (live) return { key: live.id, name: live.name, color: live.color, closed: false };
     return { key: `former:${card.formerProject}`, name: card.formerProject, color: card.formerColor ?? "#666666", closed: true };
   }
-  return LOOSE;
+  return { key: "loose", name: LOOSE_NAME[lang], color: "#666666", closed: false };
 }
 
 export function areaOf(card: CardDTO, projects: Map<string, ProjectDTO>): AreaKey | null {
@@ -164,7 +198,8 @@ export function filterCards(cards: CardDTO[], projects: Map<string, ProjectDTO>,
     (c) =>
       (f.area === "ALL" || areaOf(c, projects) === f.area) &&
       (f.view === "ALL" || viewOf(c) === f.view) &&
-      (!f.project || groupOf(c, projects).key === f.project),
+      // Only the key matters here, which is the same in every language.
+      (!f.project || groupOf(c, projects, "es").key === f.project),
   );
 }
 
@@ -196,10 +231,6 @@ export function unitFor(r: Range): Unit {
   return "month";
 }
 
-const fmtWeekday = new Intl.DateTimeFormat("es-CO", { weekday: "short", day: "numeric", month: "short" });
-const fmtMonth = new Intl.DateTimeFormat("es-CO", { month: "short", year: "2-digit" });
-const fmtMonthLong = new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric" });
-
 function bucketStarts(r: Range, unit: Unit): Date[] {
   const out: Date[] = [];
   if (unit === "hour") {
@@ -218,7 +249,8 @@ function bucketStarts(r: Range, unit: Unit): Date[] {
  * Done and parked per bucket, plus how many cards were open at the end of each one (parked
  * before then and not done by then; cards done before they were parked count as never open).
  */
-export function series(cards: CardDTO[], r: Range, unit: Unit): Bucket[] {
+export function series(cards: CardDTO[], r: Range, unit: Unit, lang: Lang): Bucket[] {
+  const { day: fmtDay, weekday: fmtWeekday, month: fmtMonth, monthLong: fmtMonthLong } = FMT[lang];
   const starts = bucketStarts(r, unit);
   const buckets: Bucket[] = starts.map((start, i) => {
     const end = starts[i + 1] ?? (unit === "hour" ? r.end : unit === "day" ? addDays(start, 1) : unit === "week" ? addDays(start, 7) : addMonths(start, 1));
@@ -236,7 +268,7 @@ export function series(cards: CardDTO[], r: Range, unit: Unit): Bucket[] {
         : unit === "day"
           ? fmtWeekday.format(start)
           : unit === "week"
-            ? `Semana del ${fmtDay.format(start)}`
+            ? `${lang === "es" ? "Semana del" : "Week of"} ${fmtDay.format(start)}`
             : fmtMonthLong.format(start);
     return { start, end, label, tip, done: 0, created: 0, open: 0 };
   });
@@ -276,13 +308,13 @@ export const LEAD_BINS = [
   { label: "6–24 h", max: 24 },
   { label: "1–3 d", max: 72 },
   { label: "3–7 d", max: 168 },
-  { label: "1–2 sem", max: 336 },
-  { label: "2–4 sem", max: 672 },
-  { label: "> 4 sem", max: Infinity },
+  { label: { es: "1–2 sem", en: "1–2 wk" }, max: 336 },
+  { label: { es: "2–4 sem", en: "2–4 wk" }, max: 672 },
+  { label: { es: "> 4 sem", en: "> 4 wk" }, max: Infinity },
 ] as const;
 
-export function leadHistogram(done: CardDTO[]) {
-  const counts = LEAD_BINS.map((b) => ({ label: b.label, count: 0 }));
+export function leadHistogram(done: CardDTO[], lang: Lang) {
+  const counts = LEAD_BINS.map((b) => ({ label: typeof b.label === "string" ? b.label : b.label[lang], count: 0 }));
   for (const c of done) {
     const h = leadHours(c);
     if (h === null) continue;
@@ -298,13 +330,13 @@ export function median(xs: number[]) {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
-/** "45 min", "5 h", "3,2 d". */
-export function durationLabel(hours: number | null) {
+/** "45 min", "5 h", "3,2 d" ("3.2 d"). */
+export function durationLabel(hours: number | null, lang: Lang) {
   if (hours === null) return "—";
   if (hours < 1) return `${Math.max(1, Math.round(hours * 60))} min`;
   if (hours < 48) return `${Math.round(hours)} h`;
   const days = hours / 24;
-  return `${days < 10 ? days.toLocaleString("es-CO", { maximumFractionDigits: 1 }) : Math.round(days)} d`;
+  return `${days < 10 ? days.toLocaleString(LOCALE[lang], { maximumFractionDigits: 1 }) : Math.round(days)} d`;
 }
 
 /* ───────────────────────── breakdowns ───────────────────────── */
@@ -322,17 +354,19 @@ function countBy(cards: CardDTO[], key: (c: CardDTO) => { key: string; label: st
   return [...rows.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
-export const byKind = (cards: CardDTO[]) => countBy(cards, (c) => ({ key: c.kind, label: KIND[c.kind] }));
-export const byPriority = (cards: CardDTO[]) =>
-  countBy(cards, (c) => ({ key: c.priority, label: PRIORITY[c.priority].label })).sort(
-    (a, b) => Object.keys(PRIORITY).indexOf(b.key) - Object.keys(PRIORITY).indexOf(a.key),
+export const byKind = (cards: CardDTO[], lang: Lang) => countBy(cards, (c) => ({ key: c.kind, label: labels(lang).KIND[c.kind] }));
+export const byPriority = (cards: CardDTO[], lang: Lang) => {
+  const { PRIORITY } = labels(lang);
+  return countBy(cards, (c) => ({ key: c.priority, label: PRIORITY[c.priority].label, color: PRIORITY[c.priority].color })).sort(
+    (a, b) => Object.keys(PRIORITY).indexOf(b.key as PriorityKey) - Object.keys(PRIORITY).indexOf(a.key as PriorityKey),
   );
-export const byArea = (cards: CardDTO[], projects: Map<string, ProjectDTO>) =>
+};
+export const byArea = (cards: CardDTO[], projects: Map<string, ProjectDTO>, lang: Lang) =>
   countBy(cards, (c) => {
     const a = areaOf(c, projects);
-    return a ? { key: a, label: AREA[a] } : { key: "none", label: "Sin área" };
+    return a ? { key: a, label: labels(lang).AREA[a] } : { key: "none", label: lang === "es" ? "Sin área" : "No area" };
   });
-/** Who parked it: an agent, the web or the CLI by hand. */
+/** Who parked it: an agent, the web or the CLI by hand. Names, so the same in every language. */
 export const byOrigin = (cards: CardDTO[]) =>
   countBy(cards, (c) => {
     const who = c.agent ?? c.origin ?? "web";
@@ -342,10 +376,10 @@ export const byOrigin = (cards: CardDTO[]) =>
 export type ProjectRow = Group & { done: number; created: number; open: number; lastAt: Date | null };
 
 /** Activity per project in the range, with what is still open in each one today. */
-export function byProject(all: CardDTO[], projects: Map<string, ProjectDTO>, r: Range): ProjectRow[] {
+export function byProject(all: CardDTO[], projects: Map<string, ProjectDTO>, r: Range, lang: Lang): ProjectRow[] {
   const rows = new Map<string, ProjectRow>();
   for (const c of all) {
-    const g = groupOf(c, projects);
+    const g = groupOf(c, projects, lang);
     const row = rows.get(g.key) ?? { ...g, done: 0, created: 0, open: 0, lastAt: null };
     const created = new Date(c.createdAt);
     const done = c.status === "DONE" && c.doneAt ? new Date(c.doneAt) : null;
@@ -369,7 +403,13 @@ export function weekHourGrid(evts: Event[]) {
   return grid;
 }
 
-export const WEEKDAYS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+/** Monday-first weekday names: "Lun", "Mar"… ("Mon", "Tue"…), or "lunes"… with style long. */
+export function weekdays(lang: Lang, style: "short" | "long" = "short") {
+  const fmt = new Intl.DateTimeFormat(LOCALE[lang], { weekday: style });
+  // 2024-01-01 was a Monday.
+  const names = Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2024, 0, 1 + i)).replace(/\.$/, ""));
+  return style === "short" ? names.map((n) => n.charAt(0).toUpperCase() + n.slice(1)) : names;
+}
 
 /** Count per local day ("2026-10-15"). */
 export function perDay(evts: Event[]) {
@@ -407,7 +447,7 @@ export function longestStreak(days: Map<string, number>) {
   return best;
 }
 
-export const VIEW_OPTIONS: { key: ViewKey | "ALL"; label: string }[] = [
-  { key: "ALL", label: "Todo" },
-  ...(Object.keys(VIEWS) as ViewKey[]).map((k) => ({ key: k, label: VIEWS[k].label })),
-];
+export function viewOptions(lang: Lang): { key: ViewKey | "ALL"; label: string }[] {
+  const { VIEWS } = labels(lang);
+  return [{ key: "ALL", label: lang === "es" ? "Todo" : "All" }, ...VIEW_KEYS.map((k) => ({ key: k, label: VIEWS[k].label }))];
+}

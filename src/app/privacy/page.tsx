@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { LangSwitch } from "@/components/lang";
 import { preferredLang } from "@/lib/lang";
 
 const REPO = "https://github.com/Jjat00/parkboard";
@@ -169,10 +170,13 @@ export default async function Privacy() {
   return (
     <div className="min-h-full bg-ink">
       <main className="mx-auto max-w-2xl px-4 py-12 sm:px-6 sm:py-16">
-        <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg">
-          <ArrowLeft size={15} />
-          {c.back}
-        </Link>
+        <div className="flex items-center justify-between">
+          <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg">
+            <ArrowLeft size={15} />
+            {c.back}
+          </Link>
+          <LangSwitch />
+        </div>
         <h1 className="mt-8 text-4xl font-semibold tracking-tight">
           <span className="text-gradient">{c.title}</span>
         </h1>

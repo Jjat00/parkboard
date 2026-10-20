@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Bot, CheckCheck, Download, FolderKanban, KeyRound, Layers, Lock, Star, Terminal, UserLock } from "lucide-react";
 import { CopyButton } from "@/components/copy-button";
+import { LangSwitch } from "@/components/lang";
 import { AGENT_RULE, SETUP_PROMPT } from "@/lib/agent-setup";
 import type { Lang } from "@/lib/lang";
 
@@ -62,7 +63,6 @@ const COPY = {
     cliOut: "parked #13 Check the coupon with free shipping (shop)",
     soonTitle: "Rather host it yourself?",
     soon: "The code is public: run your own board on your own servers in a few minutes, then point the CLI at it with park login --url.",
-    stack: "Next.js 16 · React 19 · React Flow · Prisma 7 on Postgres · Clerk",
     by: "Built by",
     privacy: "Privacy",
     starNav: "Star on GitHub",
@@ -122,7 +122,6 @@ const COPY = {
     cliOut: "parqueada #13 Revisar el cupón con envío gratis (tienda)",
     soonTitle: "¿Prefieres tu propio servidor?",
     soon: "El código es público: monta tu propio tablero en tus servidores en unos minutos y apunta el CLI con park login --url.",
-    stack: "Next.js 16 · React 19 · React Flow · Prisma 7 sobre Postgres · Clerk",
     by: "Hecho por",
     privacy: "Privacidad",
     starNav: "Estrella en GitHub",
@@ -213,6 +212,7 @@ export function Landing({ lang }: { lang: Lang }) {
             </span>
           </Link>
           <nav className="ml-auto flex items-center gap-1.5 text-sm">
+            <LangSwitch className="mr-1" />
             <a
               href={REPO}
               className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-muted transition-colors hover:bg-raised hover:text-fg"
@@ -449,9 +449,8 @@ export function Landing({ lang }: { lang: Lang }) {
           </a>
         </section>
 
-        <footer className="flex flex-col items-center justify-between gap-3 py-12 text-xs text-faint sm:flex-row">
-          <span className="font-mono">{c.stack}</span>
-          <span className="flex items-center gap-4">
+        <footer className="flex justify-center py-12 text-xs text-faint">
+          <span className="flex flex-wrap items-center justify-center gap-4">
             <Link href="/privacy" className="text-muted hover:text-fg">
               {c.privacy}
             </Link>

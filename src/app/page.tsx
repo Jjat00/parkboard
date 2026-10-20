@@ -13,6 +13,11 @@ const DESCRIPTION = {
   es: "Un lienzo infinito para lo que queda para después, con un CLI para que tus agentes parqueen por ti.",
 };
 
+const NO_ACCESS = {
+  en: { body: "This account has no access to this board.", signOut: "Sign out" },
+  es: { body: "Esta cuenta no tiene acceso a este tablero.", signOut: "Cerrar sesión" },
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   const description = DESCRIPTION[await preferredLang()];
   return {
@@ -30,11 +35,12 @@ export default async function Home() {
   if (!isAuthenticated) return <Landing lang={await preferredLang()} />;
   const owner = await actorFromSession();
   if (!owner) {
+    const c = NO_ACCESS[await preferredLang()];
     return (
       <main className="flex h-full flex-col items-center justify-center gap-4 text-center">
-        <p className="text-muted">Esta cuenta no tiene acceso a este tablero.</p>
+        <p className="text-muted">{c.body}</p>
         <SignOutButton>
-          <button className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-raised">Cerrar sesión</button>
+          <button className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-raised">{c.signOut}</button>
         </SignOutButton>
       </main>
     );
