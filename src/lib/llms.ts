@@ -32,6 +32,8 @@ const HOW = `## How it works
 
 ## Getting started
 
+An agent with a terminal can do all of this by itself: tell it to read ${SITE}/setup.md and follow it (install, \`park login\`, and a standing rule saved in its own instructions so it parks things without being reminded). By hand:
+
 1. Install the CLI (one file, Node 20+): \`curl -fsSL ${SITE}/install.sh | sh\` (macOS, Linux, WSL; it downloads ${CLI_URL} and links ~/.local/bin/park to it). On Windows PowerShell: \`irm ${SITE}/install.ps1 | iex\`.
 2. Run \`park login\`: it opens the browser, you sign in with Google and authorize the terminal, and its key is saved. Without a browser on that machine, create a key from the "CLI" button on the board and run the \`park config --url … --key pk_…\` command it shows.
 3. Tell your agent (in CLAUDE.md, AGENTS.md or similar) to park things with \`park add\` whenever you say "let's leave that for later", and to run \`park schema\` to learn the commands.
@@ -83,6 +85,7 @@ const LINKS = `## Links
 
 - [Home](${SITE}/): what Parkboard is, with a screenshot.
 - [Privacy](${SITE}/privacy): what is stored, how it is encrypted and who can see it.
+- [Agent setup](${SITE}/setup.md): steps an AI agent follows to install the CLI, connect it and keep parking on its own.
 - [Source code and README](${REPO})
 - [CLI source](${CLI_URL})
 

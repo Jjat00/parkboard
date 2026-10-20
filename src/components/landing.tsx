@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Bot, CheckCheck, Download, FolderKanban, KeyRound, Layers, Lock, Star, Terminal, UserLock } from "lucide-react";
 import { CopyButton } from "@/components/copy-button";
+import { AGENT_RULE, SETUP_PROMPT } from "@/lib/agent-setup";
 import type { Lang } from "@/lib/lang";
 
 const REPO = "https://github.com/Jjat00/parkboard";
@@ -20,15 +21,18 @@ const COPY = {
     shotAlt: "Parkboard: the Tasks view with cards grouped by project",
     heroCmd: "Two commands and your agent can park things:",
     heroWin: "On Windows PowerShell, install with",
+    heroAgent: "Or let your agent set it up",
+    agentTitle: "The easy way: ask your agent",
+    agentBody: "Paste this into Claude Code, Codex, Gemini CLI, Cursor or any agent with a terminal. It installs the CLI, opens your browser so you authorize it, and saves a standing rule in its own instructions, so it parks things without you reminding it.",
+    manualTitle: "Or by hand",
     copy: "Copy",
     startTitle: "Start in a minute",
-    startLead: "No repo to clone: install the CLI, sign in from the terminal and tell your agent.",
+    startLead: "No repo to clone: your agent can do the whole setup, or you can do it in three steps.",
     startSteps: [
       { t: "Install the CLI", d: "One file, no dependencies. Needs Node 20 or newer. The first line is for macOS, Linux and WSL; the second, for Windows PowerShell." },
       { t: "Connect it to your board", d: "It opens the browser, you sign in with Google and authorize the terminal. Done: the key is saved." },
-      { t: "Tell your agent", d: "Paste this into CLAUDE.md, AGENTS.md or your agent's instructions." },
+      { t: "Give your agent the rule", d: "Paste this into the instructions it loads every session: ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md, ~/.gemini/GEMINI.md or your agent's rules." },
     ],
-    agentRule: "When I say “let's leave that for later” or mention a task we won't do now, park it with park add, with enough notes to pick it up cold. Run park schema to learn the commands.",
     whyTitle: "Why",
     why: "One task keeps spawning others: a bug you spot while fixing something else, an idea for later, a check to run before shipping. You stay on the main task, and by the end of the session those side tasks are lost in the conversation. Parkboard keeps them in one place.",
     howTitle: "How it works",
@@ -77,15 +81,18 @@ const COPY = {
     shotAlt: "Parkboard: la vista Tareas con tarjetas agrupadas por proyecto",
     heroCmd: "Dos comandos y tu agente ya puede parquear:",
     heroWin: "En PowerShell de Windows, instala con",
+    heroAgent: "O deja que tu agente lo configure",
+    agentTitle: "Lo más fácil: pídeselo a tu agente",
+    agentBody: "Pega esto en Claude Code, Codex, Gemini CLI, Cursor o cualquier agente con terminal. Instala el CLI, te abre el navegador para que lo autorices y guarda una regla en sus propias instrucciones, para que parquee sin que tengas que recordárselo.",
+    manualTitle: "O a mano",
     copy: "Copiar",
     startTitle: "Empieza en un minuto",
-    startLead: "Sin clonar nada: instala el CLI, entra desde la terminal y díselo a tu agente.",
+    startLead: "Sin clonar nada: tu agente puede hacer toda la configuración, o la haces tú en tres pasos.",
     startSteps: [
       { t: "Instala el CLI", d: "Un solo archivo, sin dependencias. Necesita Node 20 o más nuevo. La primera línea es para macOS, Linux y WSL; la segunda, para PowerShell en Windows." },
       { t: "Conéctalo a tu tablero", d: "Abre el navegador, entras con Google y autorizas la terminal. Listo: la clave queda guardada." },
-      { t: "Díselo a tu agente", d: "Pega esto en CLAUDE.md, AGENTS.md o las instrucciones de tu agente." },
+      { t: "Dale la regla a tu agente", d: "Pégala en las instrucciones que carga en cada sesión: ~/.claude/CLAUDE.md, ~/.codex/AGENTS.md, ~/.gemini/GEMINI.md o las reglas de tu agente." },
     ],
-    agentRule: "Cuando diga «dejémoslo para después» o mencione una tarea que no haremos ahora, parquéala con park add, con notas suficientes para retomarla en frío. Corre park schema para ver los comandos.",
     whyTitle: "Por qué",
     why: "Una tarea siempre trae otras: un bug que ves mientras arreglas algo más, una idea para luego, una revisión antes de publicar. Sigues con la tarea principal y, al final de la sesión, esas tareas laterales se pierden en la conversación. Parkboard las junta en un solo lugar.",
     howTitle: "Cómo funciona",
@@ -267,6 +274,13 @@ export function Landing({ lang }: { lang: Lang }) {
                 <CopyButton text={INSTALL_WIN} label={c.copy} />
               </span>
             </div>
+            <p className="mt-3 text-center text-sm">
+              <a href="#start" className="inline-flex items-center gap-1.5 text-cyan hover:underline">
+                <Bot size={15} />
+                {c.heroAgent}
+                <ArrowRight size={14} />
+              </a>
+            </p>
           </div>
         </section>
 
@@ -320,9 +334,23 @@ export function Landing({ lang }: { lang: Lang }) {
             <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{c.startTitle}</h2>
             <p className="mt-4 leading-relaxed text-muted">{c.startLead}</p>
           </div>
-          <ol className="mx-auto mt-8 max-w-3xl space-y-4">
+          <div className="mx-auto mt-8 max-w-3xl rounded-2xl border border-cyan/30 bg-panel/70 p-6">
+            <div className="flex items-center gap-3">
+              <Bot size={18} className="text-cyan" />
+              <h3 className="font-semibold tracking-tight">{c.agentTitle}</h3>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-muted">{c.agentBody}</p>
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-line bg-ink py-3 pl-4 pr-2">
+              <pre className="min-w-0 flex-1 whitespace-pre-wrap font-mono text-[12.5px] leading-relaxed text-fg">
+                {SETUP_PROMPT[lang]}
+              </pre>
+              <CopyButton text={SETUP_PROMPT[lang]} label={c.copy} />
+            </div>
+          </div>
+          <h3 className="mt-12 text-center font-mono text-xs uppercase tracking-widest text-faint">{c.manualTitle}</h3>
+          <ol className="mx-auto mt-6 max-w-3xl space-y-4">
             {c.startSteps.map((s, i) => {
-              const cmds = [[INSTALL, INSTALL_WIN], ["park login"], [c.agentRule]][i];
+              const cmds = [[INSTALL, INSTALL_WIN], ["park login"], [AGENT_RULE]][i];
               return (
                 <li key={s.t} className="rounded-2xl border border-line bg-panel/70 p-6">
                   <div className="flex items-baseline gap-3">
@@ -333,7 +361,7 @@ export function Landing({ lang }: { lang: Lang }) {
                   {cmds.map((cmd) => (
                     <div key={cmd} className="mt-4 flex items-start gap-2 rounded-xl border border-line bg-ink py-3 pl-4 pr-2">
                       <pre
-                        className={`min-w-0 flex-1 font-mono text-[12.5px] leading-relaxed text-fg ${i === 2 ? "whitespace-pre-wrap" : "overflow-x-auto"}`}
+                        className={`min-w-0 flex-1 font-mono text-[12.5px] leading-relaxed text-fg ${i === 2 ? "max-h-56 overflow-y-auto whitespace-pre-wrap" : "overflow-x-auto"}`}
                       >
                         {i < 2 && <span className="text-faint">{cmd === INSTALL_WIN ? "PS> " : "$ "}</span>}
                         {cmd}

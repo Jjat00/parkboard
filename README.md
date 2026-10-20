@@ -50,7 +50,13 @@ Stack: Next.js 16, React 19, Tailwind 4, React Flow, Prisma 7 on Postgres, Clerk
 
 ## Use it
 
-Nothing to clone: install the CLI (one file, Node 20+, no dependencies) and sign in from the terminal.
+Nothing to clone. The easy way is to let your agent (Claude Code, Codex, Gemini CLI, Cursor…) do it all:
+
+> Set up Parkboard for me: read https://parkboard.jato.run/setup.md and follow it step by step.
+
+[`/setup.md`](https://parkboard.jato.run/setup.md) tells the agent to install the CLI, run `park login` (you only
+click **Authorize** in the browser) and save a standing rule in its own global instructions (`~/.claude/CLAUDE.md`,
+`~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`…), so it parks things without being reminded. By hand:
 
 1. ```bash
    curl -fsSL https://parkboard.jato.run/install.sh | sh     # macOS, Linux, WSL
@@ -65,8 +71,8 @@ Nothing to clone: install the CLI (one file, Node 20+, no dependencies) and sign
    without a browser, open **CLI** on the board, create a key and run the `park config --url … --key pk_…` command
    it shows.
 
-2. Tell your agent, in `CLAUDE.md`, `AGENTS.md` or similar, to park things with `park add` when you say "let's leave
-   that for later", and to run `park schema` to learn the commands.
+2. Give your agent the standing rule: copy the block between `<!-- parkboard:start -->` and `<!-- parkboard:end -->`
+   in [`/setup.md`](https://parkboard.jato.run/setup.md) into the instructions it loads every session.
 
 ## Host it yourself
 
