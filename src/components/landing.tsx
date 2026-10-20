@@ -13,8 +13,7 @@ const INSTALL_WIN = "irm https://parkboard.jato.run/install.ps1 | iex";
 const COPY = {
   en: {
     signIn: "Sign in",
-    badge: "Free · sign in with Google",
-    start: "Start for free",
+    start: "Sign in",
     title1: "Park it",
     title2: "for later.",
     lead: "An infinite canvas for the side tasks, ideas and bugs that come up while you work with an AI agent. Your agent parks each one with enough context to pick it up cold, and a link back to the session where it was born.",
@@ -72,8 +71,7 @@ const COPY = {
   },
   es: {
     signIn: "Iniciar sesión",
-    badge: "Gratis · entra con Google",
-    start: "Empieza gratis",
+    start: "Iniciar sesión",
     title1: "Parquéalo",
     title2: "para después.",
     lead: "Un lienzo infinito para las tareas, ideas y bugs que salen mientras trabajas con un agente de IA. El agente parquea cada uno con el contexto justo para retomarlo en frío y un enlace a la sesión donde nació.",
@@ -231,17 +229,13 @@ export function Landing({ lang }: { lang: Lang }) {
         </header>
 
         <section className="pb-14 pt-16 text-center sm:pt-24">
-          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-panel/80 px-3 py-1 font-mono text-[11px] text-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-cyan" />
-            {c.badge}
-          </span>
-          <h1 className="mx-auto mt-6 max-w-3xl text-5xl font-semibold leading-[1.05] tracking-tight sm:text-7xl">
+          <h1 className="mx-auto max-w-3xl text-5xl font-semibold leading-[1.05] tracking-tight sm:text-7xl">
             {c.title1} <span className="text-gradient">{c.title2}</span>
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted sm:text-lg">{c.lead}</p>
           <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
-              href="/sign-up"
+              href="/sign-in"
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-fg px-5 py-2.5 text-sm font-medium text-ink transition-opacity hover:opacity-90 sm:w-auto"
             >
               {c.start}
