@@ -468,7 +468,8 @@ export function KeysPanel({ onClose }: { onClose: () => void }) {
     <Shell title="Claves para el CLI y los agentes" onClose={onClose}>
       <p className="text-sm text-muted">
         Cada clave actúa como tú sobre tu tablero. Úsala con el CLI <code className="font-mono text-cyan">park</code> o
-        desde tus agentes.
+        desde tus agentes. Lo más fácil es correr <code className="font-mono text-cyan">park login</code> en la
+        terminal; crea aquí una clave a mano solo para una máquina sin navegador.
       </p>
 
       <form

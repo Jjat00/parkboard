@@ -1,9 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Bot, CheckCheck, Download, FolderKanban, KeyRound, Layers, Lock, Star, Terminal, UserLock } from "lucide-react";
+import { CopyButton } from "@/components/copy-button";
 import type { Lang } from "@/lib/lang";
 
 const REPO = "https://github.com/Jjat00/parkboard";
+const INSTALL = "curl -fsSL https://parkboard.jato.run/install.sh | sh";
 
 const COPY = {
   en: {
@@ -15,6 +17,16 @@ const COPY = {
     lead: "An infinite canvas for the side tasks, ideas and bugs that come up while you work with an AI agent. Your agent parks each one with enough context to pick it up cold, and a link back to the session where it was born.",
     github: "View on GitHub",
     shotAlt: "Parkboard: the Tasks view with cards grouped by project",
+    heroCmd: "Two commands and your agent can park things:",
+    copy: "Copy",
+    startTitle: "Start in a minute",
+    startLead: "No repo to clone: install the CLI, sign in from the terminal and tell your agent.",
+    startSteps: [
+      { t: "Install the CLI", d: "One file, no dependencies. Needs Node 20 or newer, on macOS, Linux or WSL." },
+      { t: "Connect it to your board", d: "It opens the browser, you sign in with Google and authorize the terminal. Done: the key is saved." },
+      { t: "Tell your agent", d: "Paste this into CLAUDE.md, AGENTS.md or your agent's instructions." },
+    ],
+    agentRule: "When I say “let's leave that for later” or mention a task we won't do now, park it with park add, with enough notes to pick it up cold. Run park schema to learn the commands.",
     whyTitle: "Why",
     why: "One task keeps spawning others: a bug you spot while fixing something else, an idea for later, a check to run before shipping. You stay on the main task, and by the end of the session those side tasks are lost in the conversation. Parkboard keeps them in one place.",
     howTitle: "How it works",
@@ -29,7 +41,7 @@ const COPY = {
       { icon: FolderKanban, t: "Tasks, Ideas and Notes", d: "One view at a time, so ideas and notes do not crowd the work. Personal and work areas." },
       { icon: Bot, t: "Born in a session", d: "Every card remembers the agent, session and folder, so you can resume the conversation." },
       { icon: Terminal, t: "CLI for agents", d: "park has no dependencies: JSON when piped, --dry-run on writes, park schema for agents." },
-      { icon: KeyRound, t: "API keys", d: "Bearer keys for the CLI, stored as SHA-256 hashes, created from the web." },
+      { icon: KeyRound, t: "Sign in from the terminal", d: "park login opens the browser and saves a key of its own, stored as a SHA-256 hash and revocable from the web." },
       { icon: CheckCheck, t: "Done, out of the way", d: "Closed cards leave the canvas for a Done panel, grouped by day, one click from reopening." },
     ],
     privTitle: "Your board is yours alone",
@@ -43,7 +55,7 @@ const COPY = {
     cliTitle: "From the terminal",
     cliOut: "parked #13 Check the coupon with free shipping (shop)",
     soonTitle: "Rather host it yourself?",
-    soon: "The code is public: run your own board on your own servers in a few minutes.",
+    soon: "The code is public: run your own board on your own servers in a few minutes, then point the CLI at it with park login --url.",
     stack: "Next.js 16 · React 19 · React Flow · Prisma 7 on Postgres · Clerk",
     by: "Built by",
     privacy: "Privacy",
@@ -61,6 +73,16 @@ const COPY = {
     lead: "Un lienzo infinito para las tareas, ideas y bugs que salen mientras trabajas con un agente de IA. El agente parquea cada uno con el contexto justo para retomarlo en frío y un enlace a la sesión donde nació.",
     github: "Ver en GitHub",
     shotAlt: "Parkboard: la vista Tareas con tarjetas agrupadas por proyecto",
+    heroCmd: "Dos comandos y tu agente ya puede parquear:",
+    copy: "Copiar",
+    startTitle: "Empieza en un minuto",
+    startLead: "Sin clonar nada: instala el CLI, entra desde la terminal y díselo a tu agente.",
+    startSteps: [
+      { t: "Instala el CLI", d: "Un solo archivo, sin dependencias. Necesita Node 20 o más nuevo, en macOS, Linux o WSL." },
+      { t: "Conéctalo a tu tablero", d: "Abre el navegador, entras con Google y autorizas la terminal. Listo: la clave queda guardada." },
+      { t: "Díselo a tu agente", d: "Pega esto en CLAUDE.md, AGENTS.md o las instrucciones de tu agente." },
+    ],
+    agentRule: "Cuando diga «dejémoslo para después» o mencione una tarea que no haremos ahora, parquéala con park add, con notas suficientes para retomarla en frío. Corre park schema para ver los comandos.",
     whyTitle: "Por qué",
     why: "Una tarea siempre trae otras: un bug que ves mientras arreglas algo más, una idea para luego, una revisión antes de publicar. Sigues con la tarea principal y, al final de la sesión, esas tareas laterales se pierden en la conversación. Parkboard las junta en un solo lugar.",
     howTitle: "Cómo funciona",
@@ -75,7 +97,7 @@ const COPY = {
       { icon: FolderKanban, t: "Tareas, Ideas y Notas", d: "Una vista a la vez, para que ideas y notas no ensucien el trabajo. Áreas personal y trabajo." },
       { icon: Bot, t: "Nace en una sesión", d: "Cada tarjeta recuerda el agente, la sesión y la carpeta, para retomar la conversación." },
       { icon: Terminal, t: "CLI para agentes", d: "park no tiene dependencias: JSON al encadenar, --dry-run al escribir, park schema para agentes." },
-      { icon: KeyRound, t: "Claves de API", d: "Claves Bearer para el CLI, guardadas como hash SHA-256 y creadas desde la web." },
+      { icon: KeyRound, t: "Entras desde la terminal", d: "park login abre el navegador y guarda una clave propia, almacenada como hash SHA-256 y revocable desde la web." },
       { icon: CheckCheck, t: "Hechas, fuera del camino", d: "Las tarjetas cerradas salen del lienzo a un panel de Hechas, agrupadas por día y a un clic de reabrirlas." },
     ],
     privTitle: "Tu tablero es solo tuyo",
@@ -89,7 +111,7 @@ const COPY = {
     cliTitle: "Desde la terminal",
     cliOut: "parqueada #13 Revisar el cupón con envío gratis (tienda)",
     soonTitle: "¿Prefieres tu propio servidor?",
-    soon: "El código es público: monta tu propio tablero en tus servidores en unos minutos.",
+    soon: "El código es público: monta tu propio tablero en tus servidores en unos minutos y apunta el CLI con park login --url.",
     stack: "Next.js 16 · React 19 · React Flow · Prisma 7 sobre Postgres · Clerk",
     by: "Hecho por",
     privacy: "Privacidad",
@@ -223,6 +245,19 @@ export function Landing({ lang }: { lang: Lang }) {
               {c.github}
             </a>
           </div>
+          <div className="mx-auto mt-8 max-w-xl text-left">
+            <p className="text-center text-xs text-faint">{c.heroCmd}</p>
+            <div className="mt-2.5 flex items-start gap-2 rounded-xl border border-line bg-panel/80 py-3 pl-4 pr-2">
+              <pre className="min-w-0 flex-1 overflow-x-auto font-mono text-[12.5px] leading-relaxed">
+                <span className="text-faint">$ </span>
+                <span className="text-fg">{INSTALL}</span>
+                {"\n"}
+                <span className="text-faint">$ </span>
+                <span className="text-fg">park login</span>
+              </pre>
+              <CopyButton text={`${INSTALL}\npark login`} label={c.copy} />
+            </div>
+          </div>
         </section>
 
         <div className="rounded-2xl border border-line bg-panel/60 p-1.5 shadow-[0_0_80px_-20px_rgba(104,221,253,0.25)] sm:p-2">
@@ -268,6 +303,36 @@ export function Landing({ lang }: { lang: Lang }) {
               <span className="text-muted">{c.cliOut}</span>
             </pre>
           </div>
+        </section>
+
+        <section id="start" className="scroll-mt-8 pt-24">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">{c.startTitle}</h2>
+            <p className="mt-4 leading-relaxed text-muted">{c.startLead}</p>
+          </div>
+          <ol className="mx-auto mt-8 max-w-3xl space-y-4">
+            {c.startSteps.map((s, i) => {
+              const cmd = [INSTALL, "park login", c.agentRule][i];
+              return (
+                <li key={s.t} className="rounded-2xl border border-line bg-panel/70 p-6">
+                  <div className="flex items-baseline gap-3">
+                    <span className="font-mono text-xs text-gradient">0{i + 1}</span>
+                    <h3 className="font-semibold tracking-tight">{s.t}</h3>
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-muted">{s.d}</p>
+                  <div className="mt-4 flex items-start gap-2 rounded-xl border border-line bg-ink py-3 pl-4 pr-2">
+                    <pre
+                      className={`min-w-0 flex-1 font-mono text-[12.5px] leading-relaxed text-fg ${i === 2 ? "whitespace-pre-wrap" : "overflow-x-auto"}`}
+                    >
+                      {i < 2 && <span className="text-faint">$ </span>}
+                      {cmd}
+                    </pre>
+                    <CopyButton text={cmd} label={c.copy} />
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
         </section>
 
         <section className="py-24">

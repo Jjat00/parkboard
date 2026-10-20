@@ -50,17 +50,19 @@ Stack: Next.js 16, React 19, Tailwind 4, React Flow, Prisma 7 on Postgres, Clerk
 
 ## Use it
 
-1. Sign in at [parkboard.jato.run](https://parkboard.jato.run) with Google: you get your own empty board.
-2. Open **CLI** on the board, create a key and copy the `park config --url … --key pk_…` command it shows.
-3. Install the CLI (Node 20+, no dependencies) and run that command:
+Nothing to clone: install the CLI (one file, Node 20+, no dependencies) and sign in from the terminal.
 
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/Jjat00/parkboard/main/cli/park.mjs -o ~/.local/bin/park
-   chmod +x ~/.local/bin/park
-   park config --url https://parkboard.jato.run --key pk_…
+1. ```bash
+   curl -fsSL https://parkboard.jato.run/install.sh | sh
+   park login
    ```
 
-4. Tell your agent, in `CLAUDE.md`, `AGENTS.md` or similar, to park things with `park add` when you say "let's leave
+   `park login` opens [parkboard.jato.run](https://parkboard.jato.run), you sign in with Google (your own empty board
+   is created) and authorize the terminal; its key is saved in `~/.config/parkboard/config.json`. On a machine
+   without a browser, open **CLI** on the board, create a key and run the `park config --url … --key pk_…` command
+   it shows.
+
+2. Tell your agent, in `CLAUDE.md`, `AGENTS.md` or similar, to park things with `park add` when you say "let's leave
    that for later", and to run `park schema` to learn the commands.
 
 ## Host it yourself
@@ -98,8 +100,9 @@ The index key is not rotated.
 
 ## CLI
 
-On your own server, create keys from the web (**CLI** button) or with `pnpm key:create <name> <clerk-user-id>`, and
-link the CLI with `ln -s "$PWD/cli/park.mjs" ~/.local/bin/park`.
+On your own server, run `park login --url https://your-board.example.com`, or create keys from the web (**CLI**
+button) or with `pnpm key:create <name> <clerk-user-id>`. From a clone, link the CLI with
+`ln -s "$PWD/cli/park.mjs" ~/.local/bin/park`.
 
 ```bash
 park config --url https://your-board.example.com --key pk_…

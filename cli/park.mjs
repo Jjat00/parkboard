@@ -4,13 +4,16 @@
 // Output: human text on a TTY, JSON when piped or with --json. Diagnostics go to stderr.
 // Exit codes: 0 ok, 1 API or network error, 2 usage error, 3 not configured, 4 not found.
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { createServer } from "node:http";
+import { homedir, hostname } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-const VERSION = "0.3.6";
+const VERSION = "0.4.0";
+const DEFAULT_URL = "https://parkboard.jato.run";
 const CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "parkboard", "config.json");
 const ENUMS = {
   status: ["idea", "pending", "doing", "done"],
@@ -69,6 +72,10 @@ const SCHEMA = {
       },
       note: "a project is its slug, name or id, as park projects lists it",
     },
+    login: {
+      flags: { "--url": `board URL (default ${DEFAULT_URL})`, "--no-browser": "only print the URL to open" },
+      note: "opens the board in the browser, you authorize this terminal and its key is saved; for a machine without a browser, create a key from the CLI button on the board and use park config",
+    },
     config: { flags: { "--url": "board URL", "--key": "API key (pk_…)" } },
     schema: {},
   },
@@ -88,7 +95,8 @@ Usage:
   park export > board.json   the whole board as JSON (every card, done ones included)
   park project ungga-mcp --area work [--name …]
   park project ungga-mcp --delete --yes   (its cards move to loose ideas)
-  park config --url https://… --key pk_…
+  park login             connect this terminal to your board in the browser (--url for your own server)
+  park config --url https://… --key pk_…   or paste a key created from the CLI button on the board
   park schema            machine-readable description of every command
 
 Global: --json (forced when stdout is not a TTY), --help, --version
@@ -112,7 +120,7 @@ function loadConfig() {
   }
   const url = (process.env.PARKBOARD_URL ?? file.url ?? "").replace(/\/$/, "");
   const key = process.env.PARKBOARD_API_KEY ?? file.key ?? "";
-  if (!url || !key) die(3, `not configured: run \`park config --url <url> --key <pk_…>\` or set PARKBOARD_URL and PARKBOARD_API_KEY`);
+  if (!url || !key) die(3, "not configured: run `park login` (or `park config --url <url> --key <pk_…>`, or set PARKBOARD_URL and PARKBOARD_API_KEY)");
   return { url, key };
 }
 
@@ -131,7 +139,7 @@ async function request(method, path, body) {
   const text = await res.text();
   const data = text ? JSON.parse(text) : {};
   if (res.status === 404) die(4, "not found");
-  if (res.status === 401) die(3, "unauthorized: check the API key");
+  if (res.status === 401) die(3, "unauthorized: the API key was revoked or is wrong, run `park login`");
   if (!res.ok) die(1, `${method} ${path} → ${res.status} ${JSON.stringify(data.issues ?? data.error ?? data)}`);
   return data;
 }
@@ -317,6 +325,7 @@ async function main() {
       yes: { type: "boolean" },
       delete: { type: "boolean" },
       "dry-run": { type: "boolean" },
+      "no-browser": { type: "boolean" },
       json: { type: "boolean" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "V" },
@@ -417,6 +426,8 @@ async function main() {
       const { project: updated } = await request("PATCH", path, body);
       return print(updated, (p) => `updated ${p.slug}  ${p.name}  ${color("dim", p.area.toLowerCase())}`);
     }
+    case "login":
+      return login(v, print);
     case "config": {
       if (!v.url && !v.key) {
         const cfg = existsSync(CONFIG) ? JSON.parse(readFileSync(CONFIG, "utf8")) : {};
@@ -438,6 +449,80 @@ async function main() {
     default:
       die(2, `unknown command "${cmd}". Run park --help`);
   }
+}
+
+function readConfigFile() {
+  return existsSync(CONFIG) ? JSON.parse(readFileSync(CONFIG, "utf8")) : {};
+}
+
+function saveConfig(cfg) {
+  mkdirSync(join(CONFIG, ".."), { recursive: true });
+  writeFileSync(CONFIG, JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
+}
+
+/** Best effort: the URL is always printed too, so a failure here only costs a copy and paste. */
+function openBrowser(url) {
+  const wsl = process.platform === "linux" && /microsoft/i.test(readFileSafe("/proc/version"));
+  const [cmd, args] =
+    process.platform === "darwin" ? ["open", [url]]
+    : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]]
+    : wsl ? ["cmd.exe", ["/c", "start", "", url.replace(/&/g, "^&")]]
+    : ["xdg-open", [url]];
+  try {
+    spawn(cmd, args, { stdio: "ignore", detached: true }).on("error", () => {}).unref();
+  } catch {}
+}
+
+function readFileSafe(path) {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Loopback sign-in: a one-shot server on 127.0.0.1 waits for the board to redirect back with a fresh key.
+ * The random state ties the answer to this run, so another page cannot plant a key of its own.
+ */
+async function login(v, print) {
+  const url = (v.url ?? process.env.PARKBOARD_URL ?? readConfigFile().url ?? DEFAULT_URL).replace(/\/$/, "");
+  const state = randomBytes(24).toString("base64url");
+  const page = (title, body) =>
+    `<!doctype html><meta charset="utf-8"><title>${title}</title><body style="font:16px system-ui;background:#0b0b0b;color:#eee;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center"><h1 style="font-size:22px">${title}</h1><p style="color:#999">${body}</p></div>`;
+
+  const key = await new Promise((resolve, reject) => {
+    const server = createServer((req, res) => {
+      const q = new URL(req.url, "http://127.0.0.1");
+      if (q.pathname !== "/callback") return res.writeHead(404).end();
+      const got = q.searchParams.get("key") ?? "";
+      if (q.searchParams.get("state") !== state || !got.startsWith("pk_")) {
+        res.writeHead(400, { "content-type": "text/html; charset=utf-8" }).end(page("Parkboard", "This link does not belong to this park login. Run it again."));
+        return;
+      }
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(page("Parkboard ✓", "Terminal connected. You can close this tab."));
+      clearTimeout(timer);
+      server.close();
+      resolve(got);
+    });
+    const timer = setTimeout(() => {
+      server.close();
+      reject(new Error("timed out after 5 minutes waiting for the browser; run park login again"));
+    }, 5 * 60_000);
+    server.on("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const auth = new URL("/cli/login", url);
+      auth.searchParams.set("port", String(server.address().port));
+      auth.searchParams.set("state", state);
+      auth.searchParams.set("name", hostname());
+      process.stderr.write(`Open this URL to connect park to ${url}:\n\n  ${auth}\n\nWaiting for the browser…\n`);
+      if (!v["no-browser"]) openBrowser(auth.toString());
+    });
+  });
+
+  saveConfig({ ...readConfigFile(), url, key });
+  await request("GET", "/api/projects"); // fails loudly if the key does not work
+  return print({ ok: true, url, path: CONFIG }, (d) => `${color("cyan", "✓")} connected to ${d.url} (saved in ${d.path})\nTry: park add "My first parked task"`);
 }
 
 main().catch((e) => die(1, e.message));

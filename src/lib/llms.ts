@@ -32,10 +32,9 @@ const HOW = `## How it works
 
 ## Getting started
 
-1. Sign in at ${SITE} with Google: you get your own empty board.
-2. On the board, open "CLI", create a key and copy the \`park config --url … --key pk_…\` command it shows.
-3. Install the CLI: \`curl -fsSL ${CLI_URL} -o ~/.local/bin/park && chmod +x ~/.local/bin/park\`, then run the copied \`park config\` command.
-4. Tell your agent (in CLAUDE.md, AGENTS.md or similar) to park things with \`park add\` whenever you say "let's leave that for later", and to run \`park schema\` to learn the commands.
+1. Install the CLI (one file, Node 20+): \`curl -fsSL ${SITE}/install.sh | sh\` (it downloads ${CLI_URL} to ~/.local/bin/park).
+2. Run \`park login\`: it opens the browser, you sign in with Google and authorize the terminal, and its key is saved. Without a browser on that machine, create a key from the "CLI" button on the board and run the \`park config --url … --key pk_…\` command it shows.
+3. Tell your agent (in CLAUDE.md, AGENTS.md or similar) to park things with \`park add\` whenever you say "let's leave that for later", and to run \`park schema\` to learn the commands.
 
 ## Privacy
 
@@ -57,6 +56,7 @@ park rm 12 --yes
 park projects
 park project <slug> [--area work] [--name "…"] [--delete --yes]
 park export > board.json  # the whole board, done cards included
+park login                # connect this terminal in the browser (--url for your own server)
 park config --url ${SITE} --key pk_…
 park schema               # machine-readable description of every command
 \`\`\`
