@@ -18,7 +18,7 @@ My pending tasks, ideas and bugs live on my Parkboard (${SITE}), managed with th
 
 - When I say "let's leave that for later", "park it", "note that", or mention a task, bug or idea we won't do in this session, park it without asking:
   \`park add "<actionable title>" -p <project> --kind task|idea|bug|research|note --priority low|medium|high|urgent --notes "<context to pick it up cold>" --summary "<what we were doing in this conversation>"\`
-  The project is the slug of the repo or topic (\`park projects\` lists them; a new one is created on its own). An idea that belongs to no project goes without \`-p\`. The CLI attaches this session and the repo by itself.
+  The project is the slug of the repo or topic (\`park projects\` lists them; a new one is created on its own). An idea that belongs to no project goes without \`-p\`. The CLI detects the repo from the git remote, and in Claude Code and Codex it also attaches this session by itself; other agents can pass \`--agent <name> --session-id <id>\` when they know their session id.
 - Warnings and facts worth not forgetting, that are not tasks, go as \`--kind note\` with \`-p <project>\`.
 - Search first with \`park ls -q "<word>"\` so the same thing is not parked twice.
 - When I mention a card by number ("card 12", "#12"), read it first with \`park show 12\`, work on it, and run \`park done 12\` when it is finished. To resume a project, \`park ls -p <project>\` shows what is open.
@@ -54,12 +54,12 @@ Run \`park ls\`. An empty list is fine. A "not configured" or "unauthorized" err
 
 ## 4. Save the standing rule in your own instructions
 
-So that you park things without being reminded, add the block below to the instructions file you load in every session. Prefer the global, user-level file over one inside a project:
+So that you park things without being reminded, add the block below to the instructions file you load in every session. Prefer the global, user-level file over one inside a project, and add the block to the file your agent actually loads today: creating a new file can make the agent stop loading the one it used before.
 
 - Claude Code: \`~/.claude/CLAUDE.md\`
-- Codex: \`~/.codex/AGENTS.md\` (or \`$CODEX_HOME/AGENTS.md\`)
+- Codex: in \`$CODEX_HOME\` (default \`~/.codex\`), \`AGENTS.override.md\` if it exists and is not empty (Codex then loads it instead of \`AGENTS.md\`), otherwise \`AGENTS.md\`
 - Gemini CLI: \`~/.gemini/GEMINI.md\`
-- OpenCode: \`~/.config/opencode/AGENTS.md\`
+- OpenCode: \`~/.config/opencode/AGENTS.md\` if it exists; if it does not and \`~/.claude/CLAUDE.md\` exists, OpenCode is loading that one, so add the block there instead of creating a new file
 - Windsurf: \`~/.codeium/windsurf/memories/global_rules.md\`
 - Cursor and other agents whose global rules live in the app's settings: show the block to the person and ask them to paste it there; meanwhile add it to the project's \`AGENTS.md\`.
 - Any other agent: the file it reads on every session start, often \`AGENTS.md\`. If you do not know which one, ask.
