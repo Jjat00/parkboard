@@ -22,8 +22,14 @@ export async function authorizeCli(form: FormData) {
   });
   if (!req) redirect("/cli/login");
   const { raw, prefix, hash } = newKey();
-  // Sealed first: a public key that cannot be used must not leave an orphan key behind.
-  const sealed = sealForCli(raw, req.pub, req.state);
+  // Sealed first: a public key that cannot be used (e.g. a low-order X25519 point) must not leave an orphan key.
+  let sealed: string;
+  try {
+    sealed = sealForCli(raw, req.pub, req.state);
+  } catch {
+    sealed = "";
+  }
+  if (!sealed) redirect("/cli/login");
   await db.apiKey.create({ data: { ownerId: owner.userId, name: `CLI · ${req.name}`, prefix, hash } });
   const callback = new URL(`http://127.0.0.1:${req.port}/callback`);
   callback.searchParams.set("state", req.state);
