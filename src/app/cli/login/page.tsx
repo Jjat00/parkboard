@@ -51,6 +51,7 @@ export default async function CliLoginPage({ searchParams }: { searchParams: Pro
             <p className="mt-2 text-sm leading-relaxed text-muted">{c.body(req.name)}</p>
             <input type="hidden" name="port" value={req.port} />
             <input type="hidden" name="state" value={req.state} />
+            <input type="hidden" name="pub" value={req.pub} />
             <input type="hidden" name="name" value={req.name} />
             <div className="mt-6 flex gap-2">
               <button className="flex-1 rounded-lg bg-fg px-4 py-2.5 text-sm font-medium text-ink hover:opacity-90">

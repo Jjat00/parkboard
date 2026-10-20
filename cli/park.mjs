@@ -5,8 +5,8 @@
 // Exit codes: 0 ok, 1 API or network error, 2 usage error, 3 not configured, 4 not found.
 
 import { execFileSync, spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createDecipheriv, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { homedir, hostname } from "node:os";
 import { join } from "node:path";
@@ -440,8 +440,7 @@ async function main() {
         const preview = { path: CONFIG, url: cfg.url ?? null, key: cfg.key ? `${cfg.key.slice(0, 8)}…` : null };
         return print({ dry_run: true, write: preview }, (d) => `would write ${d.write.path}\nurl  ${d.write.url}\nkey  ${d.write.key}`);
       }
-      mkdirSync(join(CONFIG, ".."), { recursive: true });
-      writeFileSync(CONFIG, JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
+      saveConfig(cfg);
       return print({ ok: true, path: CONFIG }, (d) => `saved ${d.path}`);
     }
     case "schema":
@@ -455,9 +454,30 @@ function readConfigFile() {
   return existsSync(CONFIG) ? JSON.parse(readFileSync(CONFIG, "utf8")) : {};
 }
 
+/** A fresh 0600 file renamed into place: an older config.json with looser permissions never holds the new key. */
 function saveConfig(cfg) {
   mkdirSync(join(CONFIG, ".."), { recursive: true });
-  writeFileSync(CONFIG, JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
+  const tmp = `${CONFIG}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+  writeFileSync(tmp, JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+  renameSync(tmp, CONFIG);
+}
+
+// X25519 public keys in SPKI DER are this fixed prefix plus the 32 raw bytes.
+const X25519_SPKI = Buffer.from("302a300506032b656e032100", "hex");
+
+/**
+ * Opens what /cli/login sealed for this run: its ephemeral X25519 key (32 bytes), then AES-256-GCM
+ * iv (12), tag (16) and ciphertext. Mirrors src/lib/cli-seal.ts.
+ */
+function openSealedKey(sealed, privateKey, state) {
+  const buf = Buffer.from(sealed, "base64url");
+  if (buf.length < 32 + 12 + 16 + 1) throw new Error("bad sealed key");
+  const peer = createPublicKey({ key: Buffer.concat([X25519_SPKI, buf.subarray(0, 32)]), format: "der", type: "spki" });
+  const secret = diffieHellman({ privateKey, publicKey: peer });
+  const aes = Buffer.from(hkdfSync("sha256", secret, state, "parkboard-cli-login", 32));
+  const decipher = createDecipheriv("aes-256-gcm", aes, buf.subarray(32, 44));
+  decipher.setAuthTag(buf.subarray(44, 60));
+  return Buffer.concat([decipher.update(buf.subarray(60)), decipher.final()]).toString("utf8");
 }
 
 /** Best effort: the URL is always printed too, so a failure here only costs a copy and paste. */
@@ -486,27 +506,38 @@ function readFileSafe(path) {
  * The random state ties the answer to this run, so another page cannot plant a key of its own.
  */
 async function login(v, print) {
+  if (v["dry-run"]) die(2, "login has no --dry-run: it only writes your config after you authorize it in the browser");
   const url = (v.url ?? process.env.PARKBOARD_URL ?? readConfigFile().url ?? DEFAULT_URL).replace(/\/$/, "");
   const state = randomBytes(24).toString("base64url");
+  // The board seals the new key to this in-memory key pair, so the URL the browser keeps holds only ciphertext.
+  const { publicKey, privateKey } = generateKeyPairSync("x25519");
+  const pub = publicKey.export({ format: "der", type: "spki" }).subarray(X25519_SPKI.length).toString("base64url");
   const page = (title, body) =>
-    `<!doctype html><meta charset="utf-8"><title>${title}</title><body style="font:16px system-ui;background:#0b0b0b;color:#eee;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center"><h1 style="font-size:22px">${title}</h1><p style="color:#999">${body}</p></div>`;
+    `<!doctype html><meta charset="utf-8"><title>${title}</title><script>history.replaceState(null,"","/")</script><body style="font:16px system-ui;background:#0b0b0b;color:#eee;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center"><h1 style="font-size:22px">${title}</h1><p style="color:#999">${body}</p></div>`;
+  const headers = { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "referrer-policy": "no-referrer" };
 
   const key = await new Promise((resolve, reject) => {
     const server = createServer((req, res) => {
       const q = new URL(req.url, "http://127.0.0.1");
       if (q.pathname !== "/callback") return res.writeHead(404).end();
-      const got = q.searchParams.get("key") ?? "";
-      if (q.searchParams.get("state") !== state || !got.startsWith("pk_")) {
-        res.writeHead(400, { "content-type": "text/html; charset=utf-8" }).end(page("Parkboard", "This link does not belong to this park login. Run it again."));
+      let got = "";
+      try {
+        if (q.searchParams.get("state") === state) got = openSealedKey(q.searchParams.get("sealed") ?? "", privateKey, state);
+      } catch {}
+      if (!got.startsWith("pk_")) {
+        res.writeHead(400, headers).end(page("Parkboard", "This link does not belong to this park login. Run it again."));
         return;
       }
-      res.writeHead(200, { "content-type": "text/html; charset=utf-8" }).end(page("Parkboard ✓", "Terminal connected. You can close this tab."));
+      res.writeHead(200, headers).end(page("Parkboard ✓", "Terminal connected. You can close this tab."));
       clearTimeout(timer);
+      // Without this the browser's keep-alive connection holds the process open for a few more seconds.
       server.close();
+      server.closeAllConnections();
       resolve(got);
     });
     const timer = setTimeout(() => {
       server.close();
+      server.closeAllConnections();
       reject(new Error("timed out after 5 minutes waiting for the browser; run park login again"));
     }, 5 * 60_000);
     server.on("error", reject);
@@ -514,15 +545,25 @@ async function login(v, print) {
       const auth = new URL("/cli/login", url);
       auth.searchParams.set("port", String(server.address().port));
       auth.searchParams.set("state", state);
+      auth.searchParams.set("pub", pub);
       auth.searchParams.set("name", hostname());
       process.stderr.write(`Open this URL to connect park to ${url}:\n\n  ${auth}\n\nWaiting for the browser…\n`);
       if (!v["no-browser"]) openBrowser(auth.toString());
     });
   });
 
+  // Check the new pair itself, not whatever request() would pick up from the environment.
+  let res;
+  try {
+    res = await fetch(`${url}/api/projects`, { headers: { authorization: `Bearer ${key}` } });
+  } catch (e) {
+    die(1, `cannot reach ${url}: ${e.cause?.code ?? e.message}`);
+  }
+  if (!res.ok) die(1, `the board did not accept the new key (${res.status}); nothing was saved`);
   saveConfig({ ...readConfigFile(), url, key });
-  await request("GET", "/api/projects"); // fails loudly if the key does not work
-  return print({ ok: true, url, path: CONFIG }, (d) => `${color("cyan", "✓")} connected to ${d.url} (saved in ${d.path})\nTry: park add "My first parked task"`);
+  const shadowed = ["PARKBOARD_URL", "PARKBOARD_API_KEY"].filter((n) => process.env[n]);
+  if (shadowed.length) process.stderr.write(`park: warning: ${shadowed.join(" and ")} in your environment ${shadowed.length > 1 ? "take" : "takes"} precedence over the saved config\n`);
+  return print({ ok: true, url, path: CONFIG, overridden_by_env: shadowed }, (d) => `${color("cyan", "✓")} connected to ${d.url} (saved in ${d.path})\nTry: park add "My first parked task"`);
 }
 
 main().catch((e) => die(1, e.message));
