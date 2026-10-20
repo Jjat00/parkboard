@@ -53,9 +53,12 @@ Stack: Next.js 16, React 19, Tailwind 4, React Flow, Prisma 7 on Postgres, Clerk
 Nothing to clone: install the CLI (one file, Node 20+, no dependencies) and sign in from the terminal.
 
 1. ```bash
-   curl -fsSL https://parkboard.jato.run/install.sh | sh
+   curl -fsSL https://parkboard.jato.run/install.sh | sh     # macOS, Linux, WSL
    park login
    ```
+
+   On Windows PowerShell, install with `irm https://parkboard.jato.run/install.ps1 | iex` (it goes to
+   `%LOCALAPPDATA%\parkboard` and joins your user PATH), then open a new terminal and run `park login`.
 
    `park login` opens [parkboard.jato.run](https://parkboard.jato.run), you sign in with Google (your own empty board
    is created) and authorize the terminal; its key is saved in `~/.config/parkboard/config.json`. On a machine

@@ -6,6 +6,7 @@ import type { Lang } from "@/lib/lang";
 
 const REPO = "https://github.com/Jjat00/parkboard";
 const INSTALL = "curl -fsSL https://parkboard.jato.run/install.sh | sh";
+const INSTALL_WIN = "irm https://parkboard.jato.run/install.ps1 | iex";
 
 const COPY = {
   en: {
@@ -18,11 +19,12 @@ const COPY = {
     github: "View on GitHub",
     shotAlt: "Parkboard: the Tasks view with cards grouped by project",
     heroCmd: "Two commands and your agent can park things:",
+    heroWin: "On Windows PowerShell, install with",
     copy: "Copy",
     startTitle: "Start in a minute",
     startLead: "No repo to clone: install the CLI, sign in from the terminal and tell your agent.",
     startSteps: [
-      { t: "Install the CLI", d: "One file, no dependencies. Needs Node 20 or newer, on macOS, Linux or WSL." },
+      { t: "Install the CLI", d: "One file, no dependencies. Needs Node 20 or newer. The first line is for macOS, Linux and WSL; the second, for Windows PowerShell." },
       { t: "Connect it to your board", d: "It opens the browser, you sign in with Google and authorize the terminal. Done: the key is saved." },
       { t: "Tell your agent", d: "Paste this into CLAUDE.md, AGENTS.md or your agent's instructions." },
     ],
@@ -74,11 +76,12 @@ const COPY = {
     github: "Ver en GitHub",
     shotAlt: "Parkboard: la vista Tareas con tarjetas agrupadas por proyecto",
     heroCmd: "Dos comandos y tu agente ya puede parquear:",
+    heroWin: "En PowerShell de Windows, instala con",
     copy: "Copiar",
     startTitle: "Empieza en un minuto",
     startLead: "Sin clonar nada: instala el CLI, entra desde la terminal y díselo a tu agente.",
     startSteps: [
-      { t: "Instala el CLI", d: "Un solo archivo, sin dependencias. Necesita Node 20 o más nuevo, en macOS, Linux o WSL." },
+      { t: "Instala el CLI", d: "Un solo archivo, sin dependencias. Necesita Node 20 o más nuevo. La primera línea es para macOS, Linux y WSL; la segunda, para PowerShell en Windows." },
       { t: "Conéctalo a tu tablero", d: "Abre el navegador, entras con Google y autorizas la terminal. Listo: la clave queda guardada." },
       { t: "Díselo a tu agente", d: "Pega esto en CLAUDE.md, AGENTS.md o las instrucciones de tu agente." },
     ],
@@ -257,6 +260,13 @@ export function Landing({ lang }: { lang: Lang }) {
               </pre>
               <CopyButton text={`${INSTALL}\npark login`} label={c.copy} />
             </div>
+            <div className="mt-2 flex flex-wrap items-center justify-center gap-x-2 text-xs text-faint">
+              <span>{c.heroWin}</span>
+              <span className="flex items-center gap-1">
+                <code className="font-mono text-muted">{INSTALL_WIN}</code>
+                <CopyButton text={INSTALL_WIN} label={c.copy} />
+              </span>
+            </div>
           </div>
         </section>
 
@@ -312,7 +322,7 @@ export function Landing({ lang }: { lang: Lang }) {
           </div>
           <ol className="mx-auto mt-8 max-w-3xl space-y-4">
             {c.startSteps.map((s, i) => {
-              const cmd = [INSTALL, "park login", c.agentRule][i];
+              const cmds = [[INSTALL, INSTALL_WIN], ["park login"], [c.agentRule]][i];
               return (
                 <li key={s.t} className="rounded-2xl border border-line bg-panel/70 p-6">
                   <div className="flex items-baseline gap-3">
@@ -320,15 +330,17 @@ export function Landing({ lang }: { lang: Lang }) {
                     <h3 className="font-semibold tracking-tight">{s.t}</h3>
                   </div>
                   <p className="mt-2 text-sm leading-relaxed text-muted">{s.d}</p>
-                  <div className="mt-4 flex items-start gap-2 rounded-xl border border-line bg-ink py-3 pl-4 pr-2">
-                    <pre
-                      className={`min-w-0 flex-1 font-mono text-[12.5px] leading-relaxed text-fg ${i === 2 ? "whitespace-pre-wrap" : "overflow-x-auto"}`}
-                    >
-                      {i < 2 && <span className="text-faint">$ </span>}
-                      {cmd}
-                    </pre>
-                    <CopyButton text={cmd} label={c.copy} />
-                  </div>
+                  {cmds.map((cmd) => (
+                    <div key={cmd} className="mt-4 flex items-start gap-2 rounded-xl border border-line bg-ink py-3 pl-4 pr-2">
+                      <pre
+                        className={`min-w-0 flex-1 font-mono text-[12.5px] leading-relaxed text-fg ${i === 2 ? "whitespace-pre-wrap" : "overflow-x-auto"}`}
+                      >
+                        {i < 2 && <span className="text-faint">{cmd === INSTALL_WIN ? "PS> " : "$ "}</span>}
+                        {cmd}
+                      </pre>
+                      <CopyButton text={cmd} label={c.copy} />
+                    </div>
+                  ))}
                 </li>
               );
             })}

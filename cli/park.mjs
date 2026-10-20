@@ -485,7 +485,8 @@ function openBrowser(url) {
   const wsl = process.platform === "linux" && /microsoft/i.test(readFileSafe("/proc/version"));
   const [cmd, args] =
     process.platform === "darwin" ? ["open", [url]]
-    : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]]
+    // cmd would cut the URL at each & unless it is escaped.
+    : process.platform === "win32" ? ["cmd", ["/c", "start", "", url.replace(/&/g, "^&")]]
     : wsl ? ["cmd.exe", ["/c", "start", "", url.replace(/&/g, "^&")]]
     : ["xdg-open", [url]];
   try {
