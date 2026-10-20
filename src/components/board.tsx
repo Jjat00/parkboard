@@ -177,6 +177,9 @@ const FLOW_ARIA_ES: ReactFlowProps["ariaLabelConfig"] = {
   "handle.ariaLabel": "Conector",
 };
 
+/** Empty, not undefined: React Flow ignores undefined, so switching back from Spanish would keep it. */
+const FLOW_ARIA_EN: ReactFlowProps["ariaLabelConfig"] = {};
+
 function Canvas({ initial }: { initial: BoardData }) {
   const lang = useLang();
   const [data, setData] = useState<BoardData>(initial);
@@ -510,7 +513,7 @@ function Canvas({ initial }: { initial: BoardData }) {
       />
       <div className="relative flex-1">
         <ReactFlow
-          ariaLabelConfig={lang === "es" ? FLOW_ARIA_ES : undefined}
+          ariaLabelConfig={lang === "es" ? FLOW_ARIA_ES : FLOW_ARIA_EN}
           nodes={nodes}
           onNodesChange={onNodesChange}
           nodeTypes={nodeTypes}
