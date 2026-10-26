@@ -1,0 +1,8 @@
+{
+  "owner/name": {
+    "setup": "npm ci --ignore-scripts",
+    "verify": "npm test",
+    "allow": ["npm test"],
+    "autoMerge": false
+  }
+}

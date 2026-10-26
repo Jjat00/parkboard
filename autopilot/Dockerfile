@@ -15,5 +15,5 @@ ENV AUTOPILOT_AGENT_USER=agent \
     AUTOPILOT_WORKDIR=/work
 
 WORKDIR /app
-COPY autopilot.mjs repos.json ./
+COPY autopilot.mjs ./
 CMD ["node", "autopilot.mjs"]

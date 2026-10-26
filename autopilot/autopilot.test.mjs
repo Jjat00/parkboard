@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   addLink,
   appendNote,
@@ -25,6 +27,7 @@ import {
   run,
   settlePatch,
   validateRepos,
+  loadRepos,
   withTags,
 } from "./autopilot.mjs";
 
@@ -119,7 +122,14 @@ test("eligible", () => {
   for (const t of ["auto-pr", "auto-bloqueada", "auto-en-curso-mvb8tlvhf5be-a1b2c3"]) assert.equal(eligible(card({ tags: ["auto", t] })), false, t);
 });
 
-test("repos.json validation", () => {
+test("the repo list comes from AUTOPILOT_REPOS, else an untracked file", () => {
+  const none = join(tmpdir(), "no-such-repos.json");
+  assert.deepEqual(loadRepos({ AUTOPILOT_REPOS: '{"o/r":{"verify":"x"}}' }, none), { "o/r": { verify: "x" } });
+  assert.throws(() => loadRepos({}, none), /AUTOPILOT_REPOS/);
+  assert.doesNotThrow(() => validateRepos(loadRepos({}, new URL("repos.example.json", import.meta.url).pathname)));
+});
+
+test("repo list validation", () => {
   assert.doesNotThrow(() => validateRepos({ "o/r": { verify: "npm test", setup: "npm ci", allow: ["npm test"], env: { X: "1" } } }));
   assert.throws(() => validateRepos({ "o/r": {} }), /verify/);
   assert.throws(() => validateRepos({ "o/r": { verify: " " } }), /verify/);

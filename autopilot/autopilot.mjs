@@ -5,7 +5,7 @@
 // One run (a cron tick):
 //   1. Hands back cards whose run died (expired lease), after looking for a PR it may have opened.
 //   2. Lists the open cards and keeps those that pass a fixed gate (opt-in tag, kind, a repo with
-//      verifiers in repos.json, no risky words), then asks a small model, with no tools and no
+//      verifiers in AUTOPILOT_REPOS, no risky words), then asks a small model, with no tools and no
 //      settings, whether the card can be done without Jaime.
 //   3. Claims the card with a compare-and-set write (one lease tag, auto-en-curso-<id>-<repo>),
 //      so two runs never work it.
@@ -288,17 +288,27 @@ export function directReason(files, changes, repo, limits = CFG) {
   if (lines > limits.directMaxLines) return `cambia ${lines} líneas (máximo ${limits.directMaxLines} para ir directo)`;
   const config = files.find((f) => DIRECT_NEVER.some((re) => re.test(f.path.split("/").pop())));
   if (config) return `toca ${config.path}, que configura el build, las dependencias o git`;
-  // Autopilot's own code and policy (repos.json) always go through review.
+  // Autopilot's own code always goes through review.
   const own = files.find((f) => f.path.split("/").includes("autopilot"));
   if (own) return `toca ${own.path}, que es parte de Autopilot`;
   return null;
+}
+
+/**
+ * The repos Autopilot may work, with their verifiers. They live outside git: the variable
+ * AUTOPILOT_REPOS (the JSON itself, as on Railway) or, for development, an untracked repos.json.
+ */
+export function loadRepos(vars = env, file = join(HERE, "repos.json")) {
+  if (vars.AUTOPILOT_REPOS?.trim()) return JSON.parse(vars.AUTOPILOT_REPOS);
+  if (existsSync(file)) return JSON.parse(readFileSync(file, "utf8"));
+  throw new Error("set AUTOPILOT_REPOS (see repos.example.json) or create autopilot/repos.json");
 }
 
 /** Throws unless every entry has a verifier and well-formed setup, allow and env. */
 export function validateRepos(repos) {
   const SECRET_ENV = /^(GITHUB_TOKEN|GH_TOKEN|PARKBOARD_|CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_|AUTOPILOT_)/;
   for (const [name, r] of Object.entries(repos)) {
-    const where = `repos.json ${name}`;
+    const where = `AUTOPILOT_REPOS ${name}`;
     if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/.test(name)) throw new Error(`${where}: not owner/name`);
     if (typeof r.verify !== "string" || !r.verify.trim()) throw new Error(`${where}: verify must be a non-empty command`);
     if (r.setup !== undefined && typeof r.setup !== "string") throw new Error(`${where}: setup must be a string`);
@@ -354,7 +364,7 @@ export function gate(card, repos) {
   if (card.priority === "URGENT") return "es urgente; lo urgente lo ves tú.";
   if (!card.repo) return "no tiene repo: ponlo con park set <n> --repo owner/nombre.";
   if (card.tags.length >= MAX_TAGS) return `tiene ${card.tags.length} etiquetas y necesito una libre para marcarla en curso; quita alguna.`;
-  if (!repos[card.repo]) return `${card.repo} no tiene verificadores configurados en autopilot/repos.json.`;
+  if (!repos[card.repo]) return `${card.repo} no tiene verificadores configurados en AUTOPILOT_REPOS.`;
   const word = RISKY.exec(`${card.title}\n${humanNotes(card.notes)}`);
   if (word) return `menciona «${word[0]}», que está en la lista de temas que no toco solo.`;
   return null;
@@ -1107,7 +1117,7 @@ async function recover(repos) {
     const branch = branchFor(c.number, tag);
     const origin = originRepo(tag, repos);
     if (!origin) {
-      await settle(c, tag, { outcome: "blocked", note: `una ejecución anterior no terminó y su repo ya no está en repos.json; revisa a mano si dejó la rama ${branch}.` });
+      await settle(c, tag, { outcome: "blocked", note: `una ejecución anterior no terminó y su repo ya no está en AUTOPILOT_REPOS; revisa a mano si dejó la rama ${branch}.` });
       continue;
     }
     const claimed = { ...c, repo: origin };
@@ -1159,7 +1169,7 @@ async function main(flags) {
   if (!flags["dry-run"] && !CFG.agentUser && !flags["allow-host"]) {
     throw new Error("sin AUTOPILOT_AGENT_USER el agente correría con tu usuario; usa el contenedor o pasa --allow-host");
   }
-  const repos = validateRepos(JSON.parse(readFileSync(join(HERE, "repos.json"), "utf8")));
+  const repos = validateRepos(loadRepos());
   // Searchable, not listable, by the agent: it reaches its own directories by name, nothing else.
   mkdirSync(CFG.workdir, { recursive: true });
   await run("chmod", ["711", CFG.workdir]);
