@@ -121,8 +121,8 @@ park show 12                             # everything about #12, including how t
 park set 12 --status doing               # or --priority, --project, --title, --repo owner/name…
 park done 12
 park export > board.json                 # the whole board, done cards included
-park project ungga-crm --area work       # change a project's area (or --name to rename it)
-park project ungga-crm --delete --yes    # delete a project; its cards move to loose ideas
+park project acme-crm --area work       # change a project's area (or --name to rename it)
+park project acme-crm --delete --yes    # delete a project; its cards move to loose ideas
 ```
 
 Agents: `park schema` prints every command, flag and exit code as JSON.

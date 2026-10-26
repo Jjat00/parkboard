@@ -28,7 +28,7 @@ const SCHEMA = {
   description: "Park things for later on a Parkboard canvas.",
   card_reference: "a card is its short number (12 or #12, shown by park ls) or its full id",
   conventions: [
-    "Big initiative, own project: when a piece of work needs several cards (a plan, a multi-phase feature, an investigation with follow-ups), create a dedicated project for it (e.g. ungga-crm next to ungga) instead of piling cards into the parent project. A project should stay readable at a glance.",
+    "Big initiative, own project: when a piece of work needs several cards (a plan, a multi-phase feature, an investigation with follow-ups), create a dedicated project for it (e.g. acme-crm next to acme) instead of piling cards into the parent project. A project should stay readable at a glance.",
     "Move existing cards that belong to the initiative into its project with park set <n> --project <slug>.",
     "Search before adding (park ls -q) so the same thing is not parked twice.",
   ],
@@ -93,8 +93,8 @@ Usage:
   park rm 12 --yes
   park projects
   park export > board.json   the whole board as JSON (every card, done ones included)
-  park project ungga-mcp --area work [--name …]
-  park project ungga-mcp --delete --yes   (its cards move to loose ideas)
+  park project acme-api --area work [--name …]
+  park project acme-api --delete --yes   (its cards move to loose ideas)
   park login             connect this terminal to your board in the browser (--url for your own server)
   park config --url https://… --key pk_…   or paste a key created from the CLI button on the board
   park schema            machine-readable description of every command
@@ -102,7 +102,7 @@ Usage:
 Global: --json (forced when stdout is not a TTY), --help, --version
 
 Convention: a big initiative (a plan, a multi-phase feature) gets its own project
-(e.g. ungga-crm next to ungga) instead of piling cards into the parent project.`;
+(e.g. acme-crm next to acme) instead of piling cards into the parent project.`;
 
 const die = (code, msg) => {
   process.stderr.write(`park: ${msg}\n`);
@@ -397,7 +397,7 @@ async function main() {
       return process.stdout.write(JSON.stringify(await request("GET", "/api/board"), null, 2) + "\n");
     case "project": {
       const ref = positionals.join(" ").trim();
-      if (!ref) die(2, "project needs a project slug, e.g. park project ungga-mcp --area work (see `park projects`)");
+      if (!ref) die(2, "project needs a project slug, e.g. park project acme-api --area work (see `park projects`)");
       if (v.delete && (v.area !== undefined || v.name !== undefined)) die(2, "--delete cannot be combined with --area or --name");
       const body = {};
       if (v.area !== undefined) {
