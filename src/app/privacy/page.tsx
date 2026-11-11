@@ -5,7 +5,7 @@ import { LangSwitch } from "@/components/lang";
 import { preferredLang } from "@/lib/lang";
 
 const REPO = "https://github.com/Jjat00/parkboard";
-const CONTACT = "contacto@jato.run";
+const CONTACT = "contacto@jjato.com";
 
 type Section = { t: string; p?: string[]; li?: string[] };
 
@@ -17,10 +17,10 @@ const COPY = {
     updated: "Effective October 14, 2026",
     intro: [
       "This page explains what Parkboard stores, how it protects it and who can see it. It adds to the",
-      "general jato.run privacy policy",
-      ", which covers every *.jato.run app.",
+      "general jjato.com privacy policy",
+      ", which covers every *.jjato.com app.",
     ],
-    general: "https://jato.run/en/privacy/",
+    general: "https://jjato.com/en/privacy/",
     sections: [
       {
         t: "What we store",
@@ -81,7 +81,7 @@ const COPY = {
         p: ["If something important changes, this page will say so, with a new date."],
       },
     ] satisfies Section[],
-    owner: "Controller: Jaime Aza (jato.run) ·",
+    owner: "Controller: Jaime Aza (jjato) ·",
     repo: "Source code",
   },
   es: {
@@ -91,10 +91,10 @@ const COPY = {
     updated: "Vigente desde el 14 de octubre de 2026",
     intro: [
       "Esta página explica qué guarda Parkboard, cómo lo protege y quién puede verlo. Complementa la",
-      "política de privacidad general de jato.run",
-      ", que cubre todas las apps *.jato.run.",
+      "política de privacidad general de jjato.com",
+      ", que cubre todas las apps *.jjato.com.",
     ],
-    general: "https://jato.run/privacidad/",
+    general: "https://jjato.com/privacidad/",
     sections: [
       {
         t: "Qué guardamos",
@@ -155,7 +155,7 @@ const COPY = {
         p: ["Si cambia algo importante, lo dirá esta página, con una fecha nueva."],
       },
     ] satisfies Section[],
-    owner: "Responsable: Jaime Aza (jato.run) ·",
+    owner: "Responsable: Jaime Aza (jjato) ·",
     repo: "Código fuente",
   },
 } as const;

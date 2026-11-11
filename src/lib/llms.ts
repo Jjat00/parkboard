@@ -1,7 +1,7 @@
 // Plain-text descriptions of Parkboard for language models (Claude, ChatGPT, Codex…), following
 // the llms.txt convention (https://llmstxt.org). Served at /llms.txt and /llms-full.txt.
 
-export const SITE = "https://parkboard.jato.run";
+export const SITE = "https://parkboard.jjato.com";
 const REPO = "https://github.com/Jjat00/parkboard";
 const CLI_URL = "https://raw.githubusercontent.com/Jjat00/parkboard/main/cli/park.mjs";
 
@@ -9,7 +9,7 @@ const SUMMARY = `# Parkboard
 
 > Parkboard is a free, open-source infinite canvas for the side tasks, ideas, bugs and research that come up while you work with an AI coding agent. Agents such as Claude Code and Codex park each one with the \`park\` CLI, with enough context to pick it up cold and a link back to the session where it was born. The web app is at ${SITE} (sign in with Google); the code is at ${REPO} (self-hostable).
 
-The landing and privacy pages are in Spanish and English; the board itself is in Spanish. Made by Jaime Aza (https://jaimeaza.tech), part of jato.run.`;
+The landing and privacy pages are in Spanish and English; the board itself is in Spanish. Made by Jaime Aza (https://jaimeaza.tech), part of jjato (https://jjato.com).`;
 
 const HOW = `## How it works
 

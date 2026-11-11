@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs park, the Parkboard CLI: curl -fsSL https://parkboard.jato.run/install.sh | sh
+# Installs park, the Parkboard CLI: curl -fsSL https://parkboard.jjato.com/install.sh | sh
 # One file, no dependencies, Node 20+. It lives in ~/.local/share/parkboard/park.mjs (the .mjs extension is what
 # makes Node 20 load it as an ES module) and ~/.local/bin/park links to it. PARK_DIR changes the bin folder.
 set -eu

@@ -7,8 +7,8 @@ import { AGENT_RULE, SETUP_PROMPT } from "@/lib/agent-setup";
 import type { Lang } from "@/lib/lang";
 
 const REPO = "https://github.com/Jjat00/parkboard";
-const INSTALL = "curl -fsSL https://parkboard.jato.run/install.sh | sh";
-const INSTALL_WIN = "irm https://parkboard.jato.run/install.ps1 | iex";
+const INSTALL = "curl -fsSL https://parkboard.jjato.com/install.sh | sh";
+const INSTALL_WIN = "irm https://parkboard.jjato.com/install.ps1 | iex";
 
 const COPY = {
   en: {
@@ -167,14 +167,14 @@ function jsonLd(lang: Lang) {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     name: "Parkboard",
-    url: "https://parkboard.jato.run/",
+    url: "https://parkboard.jjato.com/",
     description: COPY[lang].lead,
     applicationCategory: "DeveloperApplication",
     operatingSystem: "Web, macOS, Linux, Windows",
     inLanguage: ["es", "en"],
     isAccessibleForFree: true,
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
-    image: "https://parkboard.jato.run/screenshot.png",
+    image: "https://parkboard.jjato.com/screenshot.png",
     codeRepository: REPO,
     author: { "@type": "Person", name: "Jaime Aza", url: "https://jaimeaza.tech" },
   };

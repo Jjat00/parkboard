@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 const VERSION = "0.4.0";
-const DEFAULT_URL = "https://parkboard.jato.run";
+const DEFAULT_URL = "https://parkboard.jjato.com";
 const CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "parkboard", "config.json");
 const ENUMS = {
   status: ["idea", "pending", "doing", "done"],

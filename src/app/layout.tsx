@@ -17,7 +17,7 @@ const DESCRIPTION = {
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
-    metadataBase: new URL("https://parkboard.jato.run"),
+    metadataBase: new URL("https://parkboard.jjato.com"),
     title: "Parkboard",
     description: DESCRIPTION[await preferredLang()],
     robots: { index: false, follow: false },

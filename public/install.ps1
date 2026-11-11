@@ -1,4 +1,4 @@
-# Installs park, the Parkboard CLI, on Windows: irm https://parkboard.jato.run/install.ps1 | iex
+# Installs park, the Parkboard CLI, on Windows: irm https://parkboard.jjato.com/install.ps1 | iex
 # One file, no dependencies, Node 20+. It goes to %LOCALAPPDATA%\parkboard (park.mjs plus a park.cmd shim),
 # and that folder is added to your user PATH.
 # `iex` runs in the caller's session: the script block keeps these settings from leaking into it.

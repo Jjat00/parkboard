@@ -3,7 +3,7 @@
 An infinite canvas for the things you park for later: tasks, ideas, bugs and research, grouped by project,
 with a CLI so your coding agents can park things for you when you say "let's leave that for later".
 
-**Use it free at [parkboard.jato.run](https://parkboard.jato.run)** (sign in with Google) or host it yourself.
+**Use it free at [parkboard.jjato.com](https://parkboard.jjato.com)** (sign in with Google) or host it yourself.
 
 ![Parkboard: the Tasks view with cards grouped by project](docs/screenshot.png)
 
@@ -40,7 +40,7 @@ to it is one card away.
   the server.
 - **Private by default**: one board per Clerk user, plus an optional email allowlist (`PARKBOARD_ALLOWED_EMAILS`).
   The CLI uses API keys stored as SHA-256 hashes, and `park export` saves your whole board as JSON. See the
-  [privacy policy](https://parkboard.jato.run/privacy).
+  [privacy policy](https://parkboard.jjato.com/privacy).
 - **Readable by agents and search engines**: `/llms.txt` and `/llms-full.txt` describe Parkboard, the CLI and the API
   for language models; `robots.txt` and `sitemap.xml` expose only the public pages.
 
@@ -52,27 +52,27 @@ Stack: Next.js 16, React 19, Tailwind 4, React Flow, Prisma 7 on Postgres, Clerk
 
 Nothing to clone. The easy way is to let your agent (Claude Code, Codex, Gemini CLI, Cursor…) do it all:
 
-> Set up Parkboard for me: read https://parkboard.jato.run/setup.md and follow it step by step.
+> Set up Parkboard for me: read https://parkboard.jjato.com/setup.md and follow it step by step.
 
-[`/setup.md`](https://parkboard.jato.run/setup.md) tells the agent to install the CLI, run `park login` (you only
+[`/setup.md`](https://parkboard.jjato.com/setup.md) tells the agent to install the CLI, run `park login` (you only
 click **Authorize** in the browser) and save a standing rule in its own global instructions (`~/.claude/CLAUDE.md`,
 `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`…), so it parks things without being reminded. By hand:
 
 1. ```bash
-   curl -fsSL https://parkboard.jato.run/install.sh | sh     # macOS, Linux, WSL
+   curl -fsSL https://parkboard.jjato.com/install.sh | sh     # macOS, Linux, WSL
    park login
    ```
 
-   On Windows PowerShell, install with `irm https://parkboard.jato.run/install.ps1 | iex` (it goes to
+   On Windows PowerShell, install with `irm https://parkboard.jjato.com/install.ps1 | iex` (it goes to
    `%LOCALAPPDATA%\parkboard` and joins your user PATH), then open a new terminal and run `park login`.
 
-   `park login` opens [parkboard.jato.run](https://parkboard.jato.run), you sign in with Google (your own empty board
+   `park login` opens [parkboard.jjato.com](https://parkboard.jjato.com), you sign in with Google (your own empty board
    is created) and authorize the terminal; its key is saved in `~/.config/parkboard/config.json`. On a machine
    without a browser, open **CLI** on the board, create a key and run the `park config --url … --key pk_…` command
    it shows.
 
 2. Give your agent the standing rule: copy the block between `<!-- parkboard:start -->` and `<!-- parkboard:end -->`
-   in [`/setup.md`](https://parkboard.jato.run/setup.md) into the instructions it loads every session.
+   in [`/setup.md`](https://parkboard.jjato.com/setup.md) into the instructions it loads every session.
 
 ## Host it yourself
 
