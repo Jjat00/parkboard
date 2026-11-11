@@ -81,7 +81,7 @@ const COPY = {
         p: ["If something important changes, this page will say so, with a new date."],
       },
     ] satisfies Section[],
-    owner: "Controller: Jaime Aza (jjato) ·",
+    owner: "Controller: Jaime Aza (Jjato) ·",
     repo: "Source code",
   },
   es: {
@@ -155,7 +155,7 @@ const COPY = {
         p: ["Si cambia algo importante, lo dirá esta página, con una fecha nueva."],
       },
     ] satisfies Section[],
-    owner: "Responsable: Jaime Aza (jjato) ·",
+    owner: "Responsable: Jaime Aza (Jjato) ·",
     repo: "Código fuente",
   },
 } as const;
